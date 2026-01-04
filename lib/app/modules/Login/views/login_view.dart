@@ -1,22 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:project_tracking/app/modules/dasboard/views/dasboard_view.dart';
+// import 'package:project_tracking/app/modules/dasboard/views/dasboard_view.dart';
 import '../controllers/login_controller.dart';
 
 class LoginView extends GetView<LoginController> {
   const LoginView({super.key});
 
   InputDecoration _input(String hint) => InputDecoration(
-        hintText: hint,
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide.none,
-        ),
-        hintStyle: const TextStyle(color: Colors.black38),
-      );
+    hintText: hint,
+    filled: true,
+    fillColor: Colors.white,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide.none,
+    ),
+    hintStyle: const TextStyle(color: Colors.black38),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -93,25 +93,38 @@ class LoginView extends GetView<LoginController> {
               SizedBox(
                 width: double.infinity,
                 height: 50,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFA9BA9D), // warna hijau lembut
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                child: Obx(
+                  () => ElevatedButton(
+                    // Bungkus dengan Obx untuk reaktif
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFA9BA9D),
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
-                  ),
-                  onPressed: () {
-                    debugPrint('Login tapped');
-                    Get.offAll(() => const DashboardView());
-                  },
-                  child: const Text(
-                    'Login',
-                    style: TextStyle(
-                      color: Colors.black87,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
+                    onPressed: controller.isLoading.value
+                        ? null // Disable tombol saat loading
+                        : () {
+                            controller.login(); // PANGGIL FUNGSI LOGIN
+                          },
+                    child: controller.isLoading.value
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.black87,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Login',
+                            style: TextStyle(
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                            ),
+                          ),
                   ),
                 ),
               ),
@@ -149,7 +162,11 @@ class LoginView extends GetView<LoginController> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Image.asset('assets/logo_google.webp', width: 22, height: 22),
+                      Image.asset(
+                        'assets/logo_google.webp',
+                        width: 22,
+                        height: 22,
+                      ),
                       const SizedBox(width: 10),
                       const Text(
                         'Login Dengan Google',

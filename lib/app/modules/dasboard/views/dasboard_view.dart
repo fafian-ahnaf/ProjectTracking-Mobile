@@ -103,22 +103,22 @@ class DashboardView extends StatelessWidget {
                     childAspectRatio: 1.35,
                     children: [
                       _StatCard(
-                        title: 'Total complete project',
+                        title: 'Total Project',
                         value: c.totalComplete.value.toString(),
                         onDetail: () {},
                       ),
                       _StatCard(
-                        title: 'Total incomplete project',
+                        title: 'In Progress',
                         value: c.totalIncomplete.value.toString(),
                         onDetail: () {},
                       ),
                       _StatCard(
-                        title: 'Total overdue project',
+                        title: 'Review',
                         value: c.totalOverdue.value.toString(),
                         onDetail: () {},
                       ),
                       _StatCard(
-                        title: 'Total project',
+                        title: 'Selesai',
                         value: c.totalProject.value.toString(),
                         onDetail: () {},
                       ),
@@ -176,7 +176,11 @@ class _Header extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   padding: const EdgeInsets.all(6),
-                  child: const Icon(Icons.settings, color: Colors.white, size: 18),
+                  child: const Icon(
+                    Icons.settings,
+                    color: Colors.white,
+                    size: 18,
+                  ),
                 ),
               ),
             ],
@@ -205,7 +209,11 @@ class _Header extends StatelessWidget {
 
 // ========== QUICK ACTION ==========
 class _QuickAction extends StatelessWidget {
-  const _QuickAction({required this.imagePath, required this.label, this.onTap});
+  const _QuickAction({
+    required this.imagePath,
+    required this.label,
+    this.onTap,
+  });
 
   final String imagePath;
   final String label;
