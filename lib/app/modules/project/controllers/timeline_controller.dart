@@ -1,22 +1,36 @@
-// lib/app/modules/project/controllers/timeline_controller.dart
 import 'package:get/get.dart';
-
-class TimelineItem {
-  final String message;
-  final DateTime time;
-
-  TimelineItem(this.message, this.time);
-}
+import 'package:project_tracking/app/data/models/project_item.dart';
+import 'package:project_tracking/app/data/service/project_service.dart';
 
 class TimelineController extends GetxController {
-  final items = <TimelineItem>[].obs;
+  final int projectId;
+  TimelineController(this.projectId);
 
-  get activities => null;
+  final ProjectService _service = ProjectService();
+  
+  var isLoading = false.obs;
+  var activities = <ActivityItem>[].obs;
 
-  void add(String msg) {
-    items.insert(
-      0,
-      TimelineItem(msg, DateTime.now()),
-    );
+  @override
+  void onInit() {
+    super.onInit();
+    fetchTimeline();
+  }
+
+  Future<void> fetchTimeline() async {
+    try {
+      isLoading.value = true;
+      // Panggil API getDetail yang baru kita update di Laravel
+      final data = await _service.getProjectDetail(projectId);
+      
+      if (data['activities'] != null) {
+        final List list = data['activities'];
+        activities.assignAll(list.map((e) => ActivityItem.fromJson(e)).toList());
+      }
+    } catch (e) {
+      print("Error fetch timeline: $e");
+    } finally {
+      isLoading.value = false;
+    }
   }
 }

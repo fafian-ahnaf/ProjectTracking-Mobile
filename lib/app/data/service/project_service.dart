@@ -65,6 +65,10 @@ class ProjectService {
     return {'status': response.statusCode, 'data': response.data};
   }
 
+  Future<Map<String, dynamic>> getProjectDetail(int id) async {
+    final response = await _dio.get('/api/projects/$id', options: _headers);
+    return response.data['data'];
+  }
 
   Future<Map<String, dynamic>> updateProject(
     int id,

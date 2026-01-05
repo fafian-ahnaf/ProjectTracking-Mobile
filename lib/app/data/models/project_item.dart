@@ -83,3 +83,34 @@ class ProjectItem {
     }
   }
 }
+
+
+// Tambahkan class ini di file project_item.dart (paling bawah)
+
+class ActivityItem {
+  int? id;
+  String title;
+  String? description;
+  String phase; // planning, requirement, dll
+  DateTime? occurredAt;
+
+  ActivityItem({
+    this.id,
+    required this.title,
+    this.description,
+    required this.phase,
+    this.occurredAt,
+  });
+
+  factory ActivityItem.fromJson(Map<String, dynamic> json) {
+    return ActivityItem(
+      id: json['id'],
+      title: json['title'] ?? '-',
+      description: json['description'],
+      phase: json['phase'] ?? 'general',
+      occurredAt: json['occurred_at'] != null 
+          ? DateTime.parse(json['occurred_at']) 
+          : null,
+    );
+  }
+}

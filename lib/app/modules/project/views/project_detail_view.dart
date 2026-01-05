@@ -337,6 +337,9 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                     phases: _phases,
                     requirementTag: 'req-${widget.item.hashCode}',
                     phaseName: 'Planning',
+                    // 🔥 TAMBAHKAN INI:
+                    projectId: widget.item.id!,
+                    initialContractPath: widget.item.documentPath,
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -346,6 +349,7 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                   RequirementSection(
                     brand: widget.brand,
                     controllerTag: 'req-${widget.item.hashCode}',
+                    projectId: widget.item.id!,
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -429,7 +433,7 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                     );
 
                     final right = _CardSection(
-                      title: 'Timeline Aktivitas',
+                      title: 'Timeline Project',
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -504,28 +508,28 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
           const SizedBox(height: 12),
 
           // ===== Dokumen / Catatan
-          _DetailCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Dokumen / Catatan',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 8),
-                Obx(() {
-                  final notes = phaseC.of(_phases[_active]).notes.trim();
-                  return Text(
-                    notes.isEmpty
-                        ? ((item.activity ?? '').isEmpty
-                              ? '-'
-                              : (item.activity ?? '-'))
-                        : notes,
-                  );
-                }),
-              ],
-            ),
-          ),
+          // _DetailCard(
+          //   child: Column(
+          //     crossAxisAlignment: CrossAxisAlignment.start,
+          //     children: [
+          //       const Text(
+          //         'Dokumen / Catatan',
+          //         style: TextStyle(fontWeight: FontWeight.w700),
+          //       ),
+          //       const SizedBox(height: 8),
+          //       Obx(() {
+          //         final notes = phaseC.of(_phases[_active]).notes.trim();
+          //         return Text(
+          //           notes.isEmpty
+          //               ? ((item.activity ?? '').isEmpty
+          //                     ? '-'
+          //                     : (item.activity ?? '-'))
+          //               : notes,
+          //         );
+          //       }),
+          //     ],
+          //   ),
+          // ),
         ],
       ),
     );

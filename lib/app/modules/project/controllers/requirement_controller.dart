@@ -1,194 +1,101 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:project_tracking/app/data/models/requirement_item.dart';
+import 'package:project_tracking/app/data/service/requirement_service.dart';
 
-// kalau pakai timeline, impor ini.
-// kalau tidak pakai timeline, aman dihapus saja import-nya.
-import 'timeline_controller.dart';
-
-/// =================================================
-/// MODEL
-/// =================================================
-class RequirementItem {
-  final int id;
-  final String title;
-  final String type;        // FR / NFR / Bug / Change
-  final String priority;    // Low / Medium / High / Critical
-  final String status;      // Planned / In Progress / Done
-  final String criteria;
-
-  final String? pic;
-  final DateTime? startDate;
-  final DateTime? endDate;
-
-  RequirementItem({
-    required this.id,
-    required this.title,
-    required this.type,
-    required this.priority,
-    required this.status,
-    required this.criteria,
-    this.pic,
-    this.startDate,
-    this.endDate,
-  });
-
-  RequirementItem copyWith({
-    int? id,
-    String? title,
-    String? type,
-    String? priority,
-    String? status,
-    String? criteria,
-    String? pic,
-    DateTime? startDate,
-    DateTime? endDate,
-  }) {
-    return RequirementItem(
-      id: id ?? this.id,
-      title: title ?? this.title,
-      type: type ?? this.type,
-      priority: priority ?? this.priority,
-      status: status ?? this.status,
-      criteria: criteria ?? this.criteria,
-      pic: pic ?? this.pic,
-      startDate: startDate ?? this.startDate,
-      endDate: endDate ?? this.endDate,
-    );
-  }
-}
-
-/// =================================================
-/// CONTROLLER
-/// =================================================
 class RequirementController extends GetxController {
-  RequirementController({this.timelineTag});
+  final RequirementService _service = RequirementService();
+  
+  // State
+  var items = <RequirementItem>[].obs;
+  var isLoading = false.obs;
+  
+  // Progress (Hitung berapa % yang statusnya 'Done')
+  var progress = 0.0.obs; 
 
-  /// Tag untuk TimelineController
-  final String? timelineTag;
+  // ID Project akan di-set dari UI saat init
+  int? projectId;
 
-  /// Input field
-  final titleC = TextEditingController();
-  final criteriaC = TextEditingController();
+  void setProjectId(int id) {
+    projectId = id;
+    fetchRequirements();
+  }
 
-  /// Dropdown state
-  final RxString type = 'FR'.obs;
-  final RxString priority = 'Medium'.obs;
-  final RxString status = 'Planned'.obs;
-
-  /// Data list + progress
-  final RxList<RequirementItem> items = <RequirementItem>[].obs;
-  final RxDouble progress = 0.0.obs;
-
-  int _autoId = 1;
-
-  /// ===============================
-  /// LOG AKTIVITAS (opsional)
-  /// ===============================
-  void _logActivity(String message) {
-    if (timelineTag == null) return;
-
-    if (Get.isRegistered<TimelineController>(tag: timelineTag)) {
-      final t = Get.find<TimelineController>(tag: timelineTag);
-      t.add(message);
+  Future<void> fetchRequirements() async {
+    if (projectId == null) return;
+    try {
+      isLoading.value = true;
+      final data = await _service.getRequirements(projectId!);
+      items.assignAll(data.map((e) => RequirementItem.fromJson(e)).toList());
+      _calculateProgress();
+    } catch (e) {
+      print("Error fetch req: $e");
+    } finally {
+      isLoading.value = false;
     }
   }
 
-  /// ===============================
-  /// SIMPAN REQUIREMENT
-  /// ===============================
-  void save({
-    String? pic,
-    DateTime? startDate,
-    DateTime? endDate,
-  }) {
-    final title = titleC.text.trim();
-    final criteria = criteriaC.text.trim();
-
-    if (title.isEmpty) return;
-
-    final item = RequirementItem(
-      id: _autoId++,
-      title: title,
-      type: type.value,
-      priority: priority.value,
-      status: status.value,
-      criteria: criteria,
-      pic: (pic ?? '').trim().isEmpty ? null : pic!.trim(),
-      startDate: startDate,
-      endDate: endDate,
-    );
-
-    items.add(item);
-
-    _logActivity("Requirement '$title' dibuat");
-
-    titleC.clear();
-    criteriaC.clear();
-
-    _recalcProgress();
-  }
-
-  /// ===============================
-  /// HAPUS
-  /// ===============================
-  void remove(int id) {
-    RequirementItem? removed =
-        items.firstWhereOrNull((e) => e.id == id);
-
-    items.removeWhere((e) => e.id == id);
-
-    if (removed != null) {
-      _logActivity("Requirement '${removed.title}' dihapus");
-    }
-
-    _recalcProgress();
-  }
-
-  /// ===============================
-  /// UBAH STATUS
-  /// ===============================
-  void setStatus(int id, String newStatus) {
-    final idx = items.indexWhere((e) => e.id == id);
-    if (idx == -1) return;
-
-    final old = items[idx];
-    items[idx] = old.copyWith(status: newStatus);
-
-    _logActivity(
-      "Status '${old.title}' diubah dari ${old.status} → $newStatus",
-    );
-
-    _recalcProgress();
-  }
-
-  /// ===============================
-  /// HITUNG PROGRESS OTOMATIS
-  /// ===============================
-  void _recalcProgress() {
+  void _calculateProgress() {
     if (items.isEmpty) {
-      progress.value = 0;
+      progress.value = 0.0;
       return;
     }
-
-    double total = 0;
-
-    for (final e in items) {
-      final s = e.status.toLowerCase();
-
-      if (s.contains('done')) {
-        total += 1;
-      } else if (s.contains('progress')) {
-        total += 0.5;
-      }
-    }
-
-    progress.value = total / items.length;
+    final doneCount = items.where((e) => e.status == 'Done').length;
+    progress.value = doneCount / items.length;
   }
 
-  @override
-  void onClose() {
-    titleC.dispose();
-    criteriaC.dispose();
-    super.onClose();
+  Future<void> add(RequirementItem item) async {
+    if (projectId == null) return;
+    try {
+      isLoading.value = true;
+      final res = await _service.createRequirement(projectId!, item.toJson());
+      
+      if (res['status'] == 201) {
+        // Refresh biar ID dan data sinkron
+        await fetchRequirements(); 
+        Get.back();
+        Get.snackbar('Sukses', 'Requirement berhasil ditambahkan', backgroundColor: Colors.green, colorText: Colors.white);
+      } else {
+         Get.snackbar('Gagal', 'Gagal menyimpan data', backgroundColor: Colors.red, colorText: Colors.white);
+      }
+    } catch (e) {
+      Get.snackbar('Error', '$e');
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> updateItem(int reqId, RequirementItem item) async {
+    if (projectId == null) return;
+    try {
+      isLoading.value = true;
+      final res = await _service.updateRequirement(projectId!, reqId, item.toJson());
+      
+      if (res['status'] == 200) {
+        await fetchRequirements();
+        Get.back();
+        Get.snackbar('Sukses', 'Requirement berhasil diupdate', backgroundColor: Colors.green, colorText: Colors.white);
+      } else {
+        Get.snackbar('Gagal', 'Gagal update data', backgroundColor: Colors.red, colorText: Colors.white);
+      }
+    } catch (e) {
+      Get.snackbar('Error', '$e');
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> deleteItem(int reqId) async {
+    if (projectId == null) return;
+    try {
+      final success = await _service.deleteRequirement(projectId!, reqId);
+      if (success) {
+        items.removeWhere((e) => e.id == reqId);
+        _calculateProgress();
+        Get.snackbar('Terhapus', 'Requirement berhasil dihapus');
+      }
+    } catch (e) {
+      Get.snackbar('Error', '$e');
+    }
   }
 }
