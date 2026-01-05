@@ -1,6 +1,7 @@
-// lib/app/modules/project_detail/widgets/deployment_section.dart
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher_string.dart';
+import 'package:project_tracking/app/data/models/deployment_item.dart';
 
 import '../controllers/deployment_controller.dart';
 
@@ -9,10 +10,12 @@ class DeploymentSection extends StatefulWidget {
     super.key,
     required this.brand,
     required this.controllerTag,
+    required this.projectId, // 🔥 WAJIB
   });
 
   final Color brand;
   final String controllerTag;
+  final int projectId;
 
   @override
   State<DeploymentSection> createState() => _DeploymentSectionState();
@@ -21,14 +24,14 @@ class DeploymentSection extends StatefulWidget {
 class _DeploymentSectionState extends State<DeploymentSection> {
   late final DeploymentController c;
 
-  // ===== FORM STATE =====
+  // Form State
+  String _selectedEnv = 'Development';
   String _selectedStatus = 'Planned';
-  String? _selectedEnv;
   DateTime? _startDate;
   DateTime? _endDate;
-  int? _editingIndex;
 
-  final _titleCtrl = TextEditingController();
+  final _versionCtrl = TextEditingController(); // Pengganti Title
+  final _urlCtrl = TextEditingController();     // Field baru
   final _picCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   final _startDateCtrl = TextEditingController();
@@ -38,33 +41,21 @@ class _DeploymentSectionState extends State<DeploymentSection> {
   void initState() {
     super.initState();
     if (!Get.isRegistered<DeploymentController>(tag: widget.controllerTag)) {
-      Get.put(
-        DeploymentController(tagId: widget.controllerTag),
-        tag: widget.controllerTag,
-      );
+      Get.put(DeploymentController(tagId: widget.controllerTag), tag: widget.controllerTag);
     }
     c = Get.find<DeploymentController>(tag: widget.controllerTag);
+    c.setProjectId(widget.projectId);
   }
 
   @override
   void dispose() {
-    _titleCtrl.dispose();
-    _picCtrl.dispose();
-    _notesCtrl.dispose();
-    _startDateCtrl.dispose();
-    _endDateCtrl.dispose();
+    _versionCtrl.dispose(); _urlCtrl.dispose();
+    _picCtrl.dispose(); _notesCtrl.dispose();
+    _startDateCtrl.dispose(); _endDateCtrl.dispose();
     super.dispose();
   }
 
-  int _statusToPercent(String status) {
-    final s = status.toLowerCase();
-    if (s.contains('plan')) return 0;
-    if (s.contains('progress')) return 50;
-    if (s.contains('done') || s.contains('live')) return 100;
-    return 0;
-  }
-
-  // ===== DATE PICKER =====
+  // Helper Date Picker
   Future<void> _pickDate(BuildContext ctx, bool isStart) async {
     final picked = await showDatePicker(
       context: ctx,
@@ -72,7 +63,6 @@ class _DeploymentSectionState extends State<DeploymentSection> {
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
-
     if (picked != null) {
       setState(() {
         if (isStart) {
@@ -86,12 +76,14 @@ class _DeploymentSectionState extends State<DeploymentSection> {
     }
   }
 
-  // ================= BOTTOM SHEET =================
+  String _fmt(DateTime? d) => d == null ? '' : '${d.day}/${d.month}/${d.year}';
+
+  // Open Form
   void _openForm({int? editIndex}) {
     if (editIndex != null) {
       final it = c.items[editIndex];
-      _editingIndex = editIndex;
-      _titleCtrl.text = it.title;
+      _versionCtrl.text = it.version ?? '';
+      _urlCtrl.text = it.url ?? '';
       _picCtrl.text = it.pic ?? '';
       _notesCtrl.text = it.notes ?? '';
       _selectedEnv = it.environment;
@@ -101,36 +93,27 @@ class _DeploymentSectionState extends State<DeploymentSection> {
       _startDateCtrl.text = _fmt(it.startDate);
       _endDateCtrl.text = _fmt(it.endDate);
     } else {
-      _editingIndex = null;
-      _titleCtrl.clear();
-      _picCtrl.clear();
-      _notesCtrl.clear();
-      _selectedEnv = null;
+      _versionCtrl.clear(); _urlCtrl.clear();
+      _picCtrl.clear(); _notesCtrl.clear();
+      _selectedEnv = 'Development';
       _selectedStatus = 'Planned';
-      _startDate = null;
-      _endDate = null;
-      _startDateCtrl.clear();
-      _endDateCtrl.clear();
+      _startDate = null; _endDate = null;
+      _startDateCtrl.clear(); _endDateCtrl.clear();
     }
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
-      builder: _buildForm,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+      builder: (ctx) => _buildForm(ctx, editIndex),
     );
   }
 
-  Widget _buildForm(BuildContext ctx) {
-    final media = MediaQuery.of(ctx);
+  Widget _buildForm(BuildContext ctx, int? editIndex) {
     return Padding(
       padding: EdgeInsets.only(
-        bottom: media.viewInsets.bottom,
-        left: 16,
-        right: 16,
-        top: 16,
+        bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+        left: 16, right: 16, top: 16,
       ),
       child: SingleChildScrollView(
         child: Column(
@@ -139,444 +122,176 @@ class _DeploymentSectionState extends State<DeploymentSection> {
           children: [
             Row(
               children: [
-                Text(
-                  _editingIndex == null
-                      ? 'Tambah Deployment'
-                      : 'Edit Deployment',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                  ),
-                ),
+                Text(editIndex == null ? 'Tambah Deployment' : 'Edit Deployment',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 const Spacer(),
-                IconButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  icon: const Icon(Icons.close),
-                ),
+                IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close)),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
 
             DropdownButtonFormField<String>(
               value: _selectedEnv,
               isExpanded: true,
-              decoration: _fieldDecoration(
-                hint: 'Environment (Dev / Staging / Production, opsional)',
-              ),
-              items: const [
-                DropdownMenuItem(value: 'Development', child: Text('Development')),
-                DropdownMenuItem(value: 'Staging', child: Text('Staging')),
-                DropdownMenuItem(value: 'Production', child: Text('Production')),
-              ],
-              onChanged: (v) => setState(() => _selectedEnv = v),
+              decoration: _dec(hint: 'Environment'),
+              items: c.environments.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+              onChanged: (v) => setState(() => _selectedEnv = v!),
             ),
             const SizedBox(height: 10),
 
-            TextField(
-              controller: _titleCtrl,
-              decoration: _fieldDecoration(
-                hint: 'Judul / nama aktivitas deployment',
-              ),
-            ),
+            TextField(controller: _versionCtrl, decoration: _dec(hint: 'Versi (e.g. v1.0.2)')),
             const SizedBox(height: 10),
 
             DropdownButtonFormField<String>(
               value: _selectedStatus,
-              isExpanded: true,
-              decoration: _fieldDecoration(hint: 'Status'),
-              items: c.statuses
-                  .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                  .toList(),
-              onChanged: (v) =>
-                  setState(() => _selectedStatus = v ?? 'Planned'),
+              decoration: _dec(hint: 'Status'),
+              items: c.statuses.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+              onChanged: (v) => setState(() => _selectedStatus = v!),
             ),
             const SizedBox(height: 10),
 
-            // ===== TANGGAL MULAI =====
-            TextField(
-              controller: _startDateCtrl,
-              readOnly: true,
-              onTap: () => _pickDate(ctx, true),
-              decoration: _fieldDecoration(
-                hint: 'Tanggal Mulai',
-              ).copyWith(
-                suffixIcon:
-                    const Icon(Icons.calendar_today_outlined),
-              ),
-            ),
+            Row(children: [
+              Expanded(child: TextField(controller: _startDateCtrl, readOnly: true, onTap: () => _pickDate(ctx, true), decoration: _dec(hint: 'Mulai'))),
+              const SizedBox(width: 10),
+              Expanded(child: TextField(controller: _endDateCtrl, readOnly: true, onTap: () => _pickDate(ctx, false), decoration: _dec(hint: 'Selesai'))),
+            ]),
             const SizedBox(height: 10),
 
-            // ===== TANGGAL SELESAI =====
-            TextField(
-              controller: _endDateCtrl,
-              readOnly: true,
-              onTap: () => _pickDate(ctx, false),
-              decoration: _fieldDecoration(
-                hint: 'Tanggal Selesai',
-              ).copyWith(
-                suffixIcon:
-                    const Icon(Icons.calendar_today_outlined),
-              ),
-            ),
+            TextField(controller: _urlCtrl, decoration: _dec(hint: 'URL Deploy (http://...)')),
             const SizedBox(height: 10),
-
-            TextField(
-              controller: _picCtrl,
-              decoration: _fieldDecoration(
-                hint: 'PIC / Penanggung jawab (opsional)',
-              ),
-            ),
+            TextField(controller: _picCtrl, decoration: _dec(hint: 'PIC (DevOps/Engineer)')),
             const SizedBox(height: 10),
-
-            TextField(
-              controller: _notesCtrl,
-              maxLines: 3,
-              decoration: _fieldDecoration(
-                hint: 'Catatan (opsional)',
-              ),
-            ),
+            TextField(controller: _notesCtrl, maxLines: 2, decoration: _dec(hint: 'Catatan')),
+            
             const SizedBox(height: 16),
-
             SizedBox(
               width: double.infinity,
-              height: 46,
+              height: 45,
               child: ElevatedButton(
-                onPressed: () => _submit(ctx),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: widget.brand,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text('Simpan Deployment'),
+                onPressed: () => _submit(ctx, editIndex),
+                style: ElevatedButton.styleFrom(backgroundColor: widget.brand, foregroundColor: Colors.white),
+                child: Text(editIndex == null ? 'Simpan' : 'Update'),
               ),
             ),
-            const SizedBox(height: 12),
           ],
         ),
       ),
     );
   }
 
-  void _submit(BuildContext ctx) {
-    final title = _titleCtrl.text.trim();
-    if (title.isEmpty) {
-      ScaffoldMessenger.of(ctx).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Isi judul / nama aktivitas deployment terlebih dahulu.'),
-        ),
-      );
-      return;
-    }
+  void _submit(BuildContext ctx, int? editIndex) {
+    // Validasi sederhana (Environment wajib di API)
+    if (_selectedEnv.isEmpty) return;
 
-    if (_editingIndex == null) {
-      c.add(
-        title: title,
-        environment: _selectedEnv,
-        status: _selectedStatus,
-        pic: _picCtrl.text.trim().isEmpty ? null : _picCtrl.text.trim(),
-        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-        startDate: _startDate,
-        endDate: _endDate,
-      );
+    final item = DeploymentItem(
+      environment: _selectedEnv,
+      version: _versionCtrl.text.trim().isEmpty ? null : _versionCtrl.text.trim(),
+      status: _selectedStatus,
+      pic: _picCtrl.text.trim().isEmpty ? null : _picCtrl.text.trim(),
+      url: _urlCtrl.text.trim().isEmpty ? null : _urlCtrl.text.trim(),
+      notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+      startDate: _startDate,
+      endDate: _endDate,
+    );
+
+    if (editIndex == null) {
+      c.add(item);
     } else {
-      final old = c.items[_editingIndex!];
-      c.updateAt(
-        _editingIndex!,
-        old.copyWith(
-          title: title,
-          environment: _selectedEnv,
-          status: _selectedStatus,
-          pic: _picCtrl.text.trim().isEmpty ? null : _picCtrl.text.trim(),
-          notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-          startDate: _startDate,
-          endDate: _endDate,
-        ),
-      );
+      c.updateItem(c.items[editIndex].id!, item);
     }
-
     Navigator.pop(ctx);
   }
 
-  String _fmt(DateTime? d) => d == null ? '' : d.toString().split(' ')[0];
+  InputDecoration _dec({String? hint}) => InputDecoration(
+    hintText: hint, contentPadding: const EdgeInsets.all(12),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+  );
 
-  // ================= BUILD =================
   @override
   Widget build(BuildContext context) {
-    const border = Color(0xFFEEF1F6);
     const zebra = Color(0xFFF7F9FC);
-
-    const double tableMinW =
-        40 + 40 + 220 + 160 + 120 + 140 + 140 + 180 + 160;
 
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: border),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1A0B1325),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
+        border: Border.all(color: const Color(0xFFEEF1F6)),
+        boxShadow: const [BoxShadow(color: Color(0x1A0B1325), blurRadius: 18, offset: Offset(0, 8))],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            decoration: BoxDecoration(
-              color: widget.brand,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(18)),
-            ),
+          Padding(
+            padding: const EdgeInsets.all(16),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Expanded(
-                  child: Text(
-                    'Pantau Progress Pekerjaanmu:',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  height: 40,
-                  child: ElevatedButton(
-                    onPressed: () => _openForm(),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Color(0xFFF69220),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    child: const Text(
-                      'Tambah Deployment',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ),
+                const Text('Deployment History', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF5C6A82))),
+                ElevatedButton(
+                  onPressed: () => _openForm(),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: widget.brand, elevation: 0, 
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: widget.brand))),
+                  child: const Text('Tambah'),
+                )
               ],
             ),
           ),
-
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
-            child: Obx(() {
-              if (c.items.isEmpty) {
-                return const _EmptyDeploymentView();
-              }
-
-              return Scrollbar(
-                thumbVisibility: true,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: ConstrainedBox(
-                    constraints:
-                        const BoxConstraints(minWidth: tableMinW),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: border),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        children: [
-                          Container(
-                            height: 44,
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 12),
-                            decoration: BoxDecoration(
-                              color: zebra,
-                              borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(12),
-                              ),
-                            ),
-                            child: Row(
-                              children: const [
-                                _HCell('', 40),
-                                _HCell('#', 40),
-                                _HCell('Judul', 220),
-                                _HCell('Environment', 160),
-                                _HCell('Status', 120),
-                                _HCell('Mulai', 140),
-                                _HCell('Selesai', 140),
-                                _HCell('PIC', 180),
-                                _HCell('Aksi', 160),
-                              ],
-                            ),
-                          ),
-                          Column(
-                            children: List.generate(c.items.length, (i) {
-                              final it = c.items[i];
-                              final percent =
-                                  _statusToPercent(it.status);
-
-                              return Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
-                                decoration: const BoxDecoration(
-                                  border: Border(
-                                    top: BorderSide(color: border),
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    SizedBox(
-                                      width: 40,
-                                      child: Checkbox(
-                                        value: percent == 100,
-                                        activeColor: widget.brand,
-                                        onChanged: (v) {
-                                          final old = c.items[i];
-                                          c.updateAt(
-                                            i,
-                                            old.copyWith(
-                                              status: (v ?? false)
-                                                  ? 'Done'
-                                                  : 'Planned',
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                    _BCell('${i + 1}', 40),
-                                    _BCell(it.title, 220),
-                                    _BCell(it.environment ?? '-', 160),
-                                    _BCell(it.status, 120),
-                                    _BCell(_fmt(it.startDate), 140),
-                                    _BCell(_fmt(it.endDate), 140),
-                                    _BCell(it.pic ?? '-', 180),
-                                    SizedBox(
-                                      width: 160,
-                                      child: Row(
-                                        children: [
-                                          TextButton(
-                                            onPressed: () =>
-                                                _openForm(editIndex: i),
-                                            child: const Text('Edit'),
-                                          ),
-                                          TextButton(
-                                            onPressed: () =>
-                                                c.removeAt(i),
-                                            child: const Text(
-                                              'Hapus',
-                                              style: TextStyle(
-                                                  color: Colors.red),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
-        ],
-      ),
-    );
-  }
-
-  InputDecoration _fieldDecoration({String? hint}) => InputDecoration(
-        hintText: hint,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        filled: true,
-        fillColor: const Color(0xFFF4F6FA),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-        enabledBorder: const OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(14)),
-          borderSide: BorderSide(color: Color(0xFFE6EAF0)),
-        ),
-        focusedBorder: const OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(14)),
-          borderSide: BorderSide(color: Color(0xFFFF9A1E)),
-        ),
-      );
-}
-
-/* ============== SUB WIDGETS ============== */
-
-class _EmptyDeploymentView extends StatelessWidget {
-  const _EmptyDeploymentView();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 200,
-      width: double.infinity,
-      color: const Color(0xFFF7F8FC),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
-          Icon(Icons.folder_rounded, size: 54, color: Color(0xFFF69220)),
-          SizedBox(height: 12),
-          Text(
-            'Belum Ada Aktivitas Deployment',
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF2D3748),
-            ),
-          ),
+          Obx(() => LinearProgressIndicator(value: c.progress.value, color: widget.brand, backgroundColor: const Color(0xFFE4E6ED), minHeight: 4)),
+          
+          Obx(() {
+            if (c.items.isEmpty) return const Padding(padding: EdgeInsets.all(30), child: Text("Belum ada deployment."));
+            
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                headingRowColor: MaterialStateProperty.all(zebra),
+                columns: const [
+                  DataColumn(label: Text('Env')),
+                  DataColumn(label: Text('Versi')),
+                  DataColumn(label: Text('Status')),
+                  DataColumn(label: Text('Tanggal')),
+                  DataColumn(label: Text('Link')),
+                  DataColumn(label: Text('PIC')),
+                  DataColumn(label: Text('Aksi')),
+                ],
+                rows: c.items.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final it = entry.value;
+                  return DataRow(cells: [
+                    DataCell(Text(it.environment, style: const TextStyle(fontWeight: FontWeight.bold))),
+                    DataCell(Text(it.version ?? '-')),
+                    DataCell(_StatusBadge(status: it.status)),
+                    DataCell(Text(_fmt(it.startDate))),
+                    DataCell(it.url != null 
+                      ? InkWell(onTap: () => launchUrlString(it.url!), child: const Icon(Icons.link, color: Colors.blue)) 
+                      : const Text('-')),
+                    DataCell(Text(it.pic ?? '-')),
+                    DataCell(Row(
+                      children: [
+                        IconButton(icon: const Icon(Icons.edit, size: 18), onPressed: () => _openForm(editIndex: i)),
+                        IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), onPressed: () => c.removeAt(i)),
+                      ],
+                    )),
+                  ]);
+                }).toList(),
+              ),
+            );
+          }),
+          const SizedBox(height: 16),
         ],
       ),
     );
   }
 }
 
-class _HCell extends StatelessWidget {
-  const _HCell(this.text, this.w);
-  final String text;
-  final double w;
-
+class _StatusBadge extends StatelessWidget {
+  final String status;
+  const _StatusBadge({required this.status});
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: w,
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF5C6A82),
-        ),
-      ),
-    );
-  }
-}
-
-class _BCell extends StatelessWidget {
-  const _BCell(this.text, this.w);
-  final String text;
-  final double w;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: w,
-      child: Text(
-        text,
-        overflow: TextOverflow.ellipsis,
-        maxLines: 2,
-      ),
-    );
+    Color col = Colors.grey;
+    if (status == 'Success') col = Colors.green;
+    if (status == 'Failed') col = Colors.red;
+    if (status == 'In Progress') col = Colors.blue;
+    return Text(status, style: TextStyle(color: col, fontWeight: FontWeight.bold));
   }
 }

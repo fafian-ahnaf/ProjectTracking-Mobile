@@ -1,102 +1,99 @@
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-
-/* ================= MODEL ================= */
-
-class MaintenanceItem {
-  final String title;
-  final String status; // Planned, In Progress, Done
-  final String? pic;
-  final String? notes;
-  final DateTime? startDate;
-  final DateTime? endDate;
-
-  MaintenanceItem({
-    required this.title,
-    required this.status,
-    this.pic,
-    this.notes,
-    this.startDate,
-    this.endDate,
-  });
-
-  MaintenanceItem copyWith({
-    String? title,
-    String? status,
-    String? pic,
-    String? notes,
-    DateTime? startDate,
-    DateTime? endDate,
-  }) {
-    return MaintenanceItem(
-      title: title ?? this.title,
-      status: status ?? this.status,
-      pic: pic ?? this.pic,
-      notes: notes ?? this.notes,
-      startDate: startDate ?? this.startDate,
-      endDate: endDate ?? this.endDate,
-    );
-  }
-}
-
-/* ================= CONTROLLER ================= */
+import 'package:project_tracking/app/data/models/maintenance_item.dart';
+import 'package:project_tracking/app/data/service/maintenance_service.dart';
 
 class MaintenanceController extends GetxController {
-  MaintenanceController({required this.tagId});
   final String tagId;
+  MaintenanceController({required this.tagId});
 
-  final items = <MaintenanceItem>[].obs;
+  final MaintenanceService _service = MaintenanceService();
+  
+  var items = <MaintenanceItem>[].obs;
+  var isLoading = false.obs;
+  var progress = 0.0.obs;
 
-  final statuses = ['Planned', 'In Progress', 'Done'];
+  int? projectId;
 
-  /* ============== ADD ============== */
+  // Status sesuai API
+  final statuses = ['Planned', 'In Progress', 'Resolved', 'Closed'];
 
-  void add({
-    required String title,
-    required String status,
-    String? pic,
-    String? notes,
-    DateTime? startDate,
-    DateTime? endDate,
-  }) {
-    items.add(
-      MaintenanceItem(
-        title: title,
-        status: status,
-        pic: pic,
-        notes: notes,
-        startDate: startDate,
-        endDate: endDate,
-      ),
-    );
+  void setProjectId(int id) {
+    projectId = id;
+    fetchMaintenances();
   }
 
-  /* ============== UPDATE ============== */
-
-  void updateAt(
-    int index, {
-    required String title,
-    required String status,
-    String? pic,
-    String? notes,
-    DateTime? startDate,
-    DateTime? endDate,
-  }) {
-    if (index < 0 || index >= items.length) return;
-
-    items[index] = items[index].copyWith(
-      title: title,
-      status: status,
-      pic: pic,
-      notes: notes,
-      startDate: startDate,
-      endDate: endDate,
-    );
+  Future<void> fetchMaintenances() async {
+    if (projectId == null) return;
+    try {
+      isLoading.value = true;
+      final data = await _service.getMaintenances(projectId!);
+      items.assignAll(data.map((e) => MaintenanceItem.fromJson(e)).toList());
+      _calculateProgress();
+    } catch (e) {
+      print("Error fetch maintenance: $e");
+    } finally {
+      isLoading.value = false;
+    }
   }
 
-  /* ============== REMOVE ============== */
+  void _calculateProgress() {
+    if (items.isEmpty) {
+      progress.value = 0.0;
+      return;
+    }
+    // Hitung item yang sudah Resolved atau Closed
+    final done = items.where((e) => e.status == 'Resolved' || e.status == 'Closed').length;
+    progress.value = done / items.length;
+  }
 
-  void removeAt(int index) {
-    if (index < 0 || index >= items.length) return;
-    items.removeAt(index);
+  Future<void> add(MaintenanceItem item) async {
+    if (projectId == null) return;
+    try {
+      isLoading.value = true;
+      final res = await _service.create(projectId!, item.toJson());
+      
+      if (res['status'] == 201) {
+        await fetchMaintenances();
+        Get.snackbar('Sukses', 'Task Maintenance ditambahkan', backgroundColor: Colors.green, colorText: Colors.white);
+      } else {
+        Get.snackbar('Gagal', res['data']['message'] ?? 'Gagal menyimpan', backgroundColor: Colors.red, colorText: Colors.white);
+      }
+    } catch (e) {
+      Get.snackbar('Error', '$e');
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> updateItem(int id, MaintenanceItem item) async {
+    if (projectId == null) return;
+    try {
+      final res = await _service.update(projectId!, id, item.toJson());
+      if (res['status'] == 200) {
+        await fetchMaintenances();
+        Get.snackbar('Sukses', 'Task Maintenance diupdate', backgroundColor: Colors.green, colorText: Colors.white);
+      } else {
+        Get.snackbar('Gagal', res['data']['message'] ?? 'Gagal update', backgroundColor: Colors.red, colorText: Colors.white);
+      }
+    } catch (e) {
+      Get.snackbar('Error', '$e');
+    }
+  }
+
+  Future<void> removeAt(int index) async {
+    final item = items[index];
+    if (item.id == null || projectId == null) return;
+
+    try {
+      final success = await _service.delete(projectId!, item.id!);
+      if (success) {
+        items.removeAt(index);
+        _calculateProgress();
+        Get.snackbar('Dihapus', 'Task maintenance dihapus');
+      }
+    } catch (e) {
+      Get.snackbar('Error', '$e');
+    }
   }
 }

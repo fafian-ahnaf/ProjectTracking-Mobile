@@ -360,19 +360,24 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                     brand: widget.brand,
                     controllerTag: 'design-${widget.item.hashCode}',
                     requirementTag: 'req-${widget.item.hashCode}',
+                    projectId: widget.item.id!, // <--- INI WAJIB ADA
                   ),
                   const SizedBox(height: 12),
                 ],
 
                 // === Development Section
+                // ...
                 if (_phases[_active] == 'Development') ...[
                   DevelopmentSection(
                     brand: widget.brand,
                     controllerTag: 'dev-${widget.item.hashCode}',
                     designTag: 'design-${widget.item.hashCode}',
+                    // 🔥 JANGAN LUPA:
+                    projectId: widget.item.id!,
                   ),
                   const SizedBox(height: 12),
                 ],
+                // ...
 
                 // === Testing Section
                 if (_phases[_active] == 'Testing') ...[
@@ -381,6 +386,8 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                     controllerTag: 'test-${widget.item.hashCode}',
                     requirementTag: 'req-${widget.item.hashCode}',
                     designTag: 'design-${widget.item.hashCode}',
+                    // 🔥 WAJIB:
+                    projectId: widget.item.id!,
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -390,6 +397,8 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                   DeploymentSection(
                     brand: widget.brand,
                     controllerTag: 'deploy-${widget.item.hashCode}',
+                    // 🔥 WAJIB:
+                    projectId: widget.item.id!,
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -399,6 +408,8 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                   MaintenanceSection(
                     brand: widget.brand,
                     controllerTag: 'maint-${widget.item.hashCode}',
+                    // 🔥 WAJIB:
+                    projectId: widget.item.id!,
                   ),
                   const SizedBox(height: 12),
                 ],

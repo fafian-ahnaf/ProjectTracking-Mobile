@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:project_tracking/app/data/models/development_item.dart';
+import 'package:project_tracking/app/data/models/design_spec_item.dart';
 
 import '../controllers/design_controller.dart';
 import '../controllers/development_controller.dart';
@@ -8,13 +10,15 @@ class DevelopmentSection extends StatefulWidget {
   const DevelopmentSection({
     super.key,
     required this.brand,
-    required this.controllerTag, // 'dev-${project.hashCode}'
-    required this.designTag,     // 'design-${project.hashCode}'
+    required this.controllerTag, 
+    required this.designTag,     
+    required this.projectId, // 🔥 WAJIB
   });
 
   final Color brand;
   final String controllerTag;
   final String designTag;
+  final int projectId;
 
   @override
   State<DevelopmentSection> createState() => _DevelopmentSectionState();
@@ -24,36 +28,30 @@ class _DevelopmentSectionState extends State<DevelopmentSection> {
   late final DevelopmentController devC;
   DesignController? designC;
 
-  // form state
-  int? _selectedDesignIndex;
+  // Form State
+  int? _selectedDesignId;
   String _status = 'In Progress';
-
-  final _devNameCtrl = TextEditingController();
-
-  // PIC & tanggal mulai / selesai
-  final TextEditingController _picCtrl = TextEditingController();
-  final TextEditingController _metaCtrl = TextEditingController();
+  final _developerCtrl = TextEditingController(); // Maps to 'pic' in API
+  final _startCtrl = TextEditingController();
+  final _endCtrl = TextEditingController();
   DateTime? _startDate;
   DateTime? _endDate;
 
-  // edit state
-  bool _isEditing = false;
-  int? _editingIndex;
+  // Edit State
+  int? _editingId; 
 
   @override
   void initState() {
     super.initState();
 
-    // Development controller
+    // Init Development Controller
     if (!Get.isRegistered<DevelopmentController>(tag: widget.controllerTag)) {
-      Get.put(
-        DevelopmentController(tagId: widget.controllerTag),
-        tag: widget.controllerTag,
-      );
+      Get.put(DevelopmentController(tagId: widget.controllerTag), tag: widget.controllerTag);
     }
     devC = Get.find<DevelopmentController>(tag: widget.controllerTag);
+    devC.setProjectId(widget.projectId);
 
-    // Design controller (sudah dibuat di DesignSection)
+    // Ambil Design Controller (harus sudah ada dari parent)
     if (Get.isRegistered<DesignController>(tag: widget.designTag)) {
       designC = Get.find<DesignController>(tag: widget.designTag);
     }
@@ -61,728 +59,219 @@ class _DevelopmentSectionState extends State<DevelopmentSection> {
 
   @override
   void dispose() {
-    _devNameCtrl.dispose();
-    _picCtrl.dispose();
-    _metaCtrl.dispose();
+    _developerCtrl.dispose();
+    _startCtrl.dispose();
+    _endCtrl.dispose();
     super.dispose();
   }
 
   void _resetForm() {
     setState(() {
-      _selectedDesignIndex = null;
-      _devNameCtrl.clear();
-      _picCtrl.clear();
-      _metaCtrl.clear();
+      _selectedDesignId = null;
+      _developerCtrl.clear();
+      _startCtrl.clear();
+      _endCtrl.clear();
       _status = 'In Progress';
       _startDate = null;
       _endDate = null;
-      _editingIndex = null;
-      _isEditing = false;
+      _editingId = null;
     });
   }
 
-  String _formatDate(DateTime? d) {
-    if (d == null) return '-';
-    final dd = d.day.toString().padLeft(2, '0');
-    final mm = d.month.toString().padLeft(2, '0');
-    final yy = d.year.toString();
-    return '$dd/$mm/$yy';
-  }
+  String _formatDate(DateTime? d) => d == null ? '-' : '${d.day}/${d.month}/${d.year}';
 
-  Future<void> _pickDate({required bool isStart}) async {
+  Future<void> _pickDate(bool isStart) async {
     final now = DateTime.now();
-    final current = (isStart ? _startDate : _endDate) ?? now;
-
     final picked = await showDatePicker(
       context: context,
-      initialDate: current,
-      firstDate: DateTime(now.year - 5),
-      lastDate: DateTime(now.year + 5),
+      initialDate: now,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
     );
-
     if (picked != null) {
       setState(() {
         if (isStart) {
           _startDate = picked;
-          if (_endDate != null && _endDate!.isBefore(picked)) {
-            _endDate = picked;
-          }
+          _startCtrl.text = _formatDate(picked);
         } else {
           _endDate = picked;
+          _endCtrl.text = _formatDate(picked);
         }
       });
     }
   }
 
   void _submit() {
-    if (designC == null || designC!.items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Belum ada DesignSpec. Buat dulu di tab Design.')),
-      );
+    if (_selectedDesignId == null) {
+      Get.snackbar('Error', 'Pilih Design Spec dulu', backgroundColor: Colors.orange, colorText: Colors.white);
+      return;
+    }
+    if (_developerCtrl.text.isEmpty) {
+      Get.snackbar('Error', 'Isi Nama Developer', backgroundColor: Colors.orange, colorText: Colors.white);
       return;
     }
 
-    if (_selectedDesignIndex == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pilih DesignSpec terlebih dahulu.')),
-      );
-      return;
-    }
+    final item = DevelopmentItem(
+      designSpecId: _selectedDesignId!,
+      pic: _developerCtrl.text.trim(),
+      status: _status,
+      startDate: _startDate,
+      endDate: _endDate,
+    );
 
-    final devName = _devNameCtrl.text.trim();
-    if (devName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Isi nama developer.')),
-      );
-      return;
-    }
-
-    final d = designC!.items[_selectedDesignIndex!];
-
-    // label untuk dropdown & tabel, misal: [API] Login — ref
-    final label = [
-      '[${d.type}]',
-      d.artifactName,
-      if ((d.reference ?? '').isNotEmpty) '— ${d.reference}',
-    ].join(' ');
-
-    final pic = _picCtrl.text.trim();
-    final meta = _metaCtrl.text.trim().isEmpty ? null : _metaCtrl.text.trim();
-
-    if (_isEditing && _editingIndex != null) {
-      final current = devC.items[_editingIndex!];
-      devC.updateAt(
-        _editingIndex!,
-        current.copyWith(
-          requirement: d.requirement,
-          designSpec: label,
-          developer: devName,
-          status: _status,
-          pic: pic.isEmpty ? null : pic,
-          meta: meta,
-          startDate: _startDate,
-          endDate: _endDate,
-        ),
-      );
+    if (_editingId != null) {
+      devC.updateItem(_editingId!, item);
     } else {
-      devC.add(
-        requirement: d.requirement,
-        designSpec: label,
-        developer: devName,
-        status: _status,
-        pic: pic.isEmpty ? null : pic,
-        meta: meta,
-        startDate: _startDate,
-        endDate: _endDate,
-      );
+      devC.add(item);
     }
-
     _resetForm();
   }
 
-  void _startEdit(int index) {
-    final task = devC.items[index];
-
-    // cari kembali index design spec berdasarkan label (kalau ada yang cocok)
-    final items = designC?.items ?? [];
-    int? designIndex;
-    for (var i = 0; i < items.length; i++) {
-      final d = items[i];
-      final label = [
-        '[${d.type}]',
-        d.artifactName,
-        if ((d.reference ?? '').isNotEmpty) '— ${d.reference}',
-      ].join(' ');
-      if (label == task.designSpec) {
-        designIndex = i;
-        break;
-      }
-    }
-
+  void _startEdit(DevelopmentItem item) {
     setState(() {
-      _editingIndex = index;
-      _isEditing = true;
-      _devNameCtrl.text = task.developer;
-      _status = task.status;
-      _selectedDesignIndex = designIndex;
-      _picCtrl.text = (task.pic ?? '');
-      _metaCtrl.text = task.meta ?? '';
-      _startDate = task.startDate;
-      _endDate = task.endDate;
+      _editingId = item.id;
+      _selectedDesignId = item.designSpecId;
+      _developerCtrl.text = item.pic ?? '';
+      _status = item.status;
+      _startDate = item.startDate;
+      _endDate = item.endDate;
+      _startCtrl.text = _formatDate(_startDate);
+      _endCtrl.text = _formatDate(_endDate);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    const border = Color(0xFFEEF1F6);
-    const zebra = Color(0xFFF7F9FC);
-
-    // opsi dropdown design spec
+    // Dropdown options dari Design Controller
     final designItems = designC?.items ?? [];
-    final designOptions = List.generate(designItems.length, (i) {
-      final d = designItems[i];
-      final label = [
-        '[${d.type}]',
-        d.artifactName,
-        if ((d.reference ?? '').isNotEmpty) '— ${d.reference}',
-      ].join(' ');
-      return _DesignOption(
-        index: i,
-        requirement: d.requirement,
-        label: label,
-      );
-    });
-
-    // lebar minimal tabel (kolom # sekarang 64)
-    final double tableMinW =
-        64 + 200 + 260 + 140 + 120 + 120 + 160 + 120 + 150;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: border),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1A0B1325),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
+        border: Border.all(color: const Color(0xFFEEF1F6)),
+        boxShadow: const [BoxShadow(color: Color(0x1A0B1325), blurRadius: 18, offset: Offset(0, 8))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ===== TITLE + PROGRESS BAR
-          const _SectionTitle('Development Tasks (terhubung DesignSpec)'),
-          const SizedBox(height: 4),
+          // Header & Progress
+          const Text('Development Tasks', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF5C6A82))),
+          Obx(() => LinearProgressIndicator(value: devC.progress.value, color: widget.brand, backgroundColor: const Color(0xFFE4E6ED))),
+          const SizedBox(height: 16),
+
+          // FORM
+          Column(
+            children: [
+              // Dropdown Design Spec
+              DropdownButtonFormField<int>(
+                value: _selectedDesignId,
+                isExpanded: true,
+                hint: const Text('Pilih Design Spec'),
+                items: designItems
+                    .where((d) => d.id != null)
+                    .map<DropdownMenuItem<int>>((d) {
+                      final label = '[${d.artifactType}] ${d.artifactName}';
+                      return DropdownMenuItem<int>(
+                        value: d.id!,
+                        child: Text(label, overflow: TextOverflow.ellipsis),
+                      );
+                    }).toList(),
+                onChanged: (v) => setState(() => _selectedDesignId = v),
+                decoration: _dec(),
+              ),
+              const SizedBox(height: 10),
+              
+              // Nama Developer
+              TextField(controller: _developerCtrl, decoration: _dec(hint: 'Nama Developer (PIC)')),
+              const SizedBox(height: 10),
+
+              Row(
+                children: [
+                  Expanded(child: TextField(controller: _startCtrl, readOnly: true, onTap: () => _pickDate(true), decoration: _dec(hint: 'Mulai'))),
+                  const SizedBox(width: 10),
+                  Expanded(child: TextField(controller: _endCtrl, readOnly: true, onTap: () => _pickDate(false), decoration: _dec(hint: 'Selesai'))),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _status,
+                      items: devC.statuses.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                      onChanged: (v) => setState(() => _status = v!),
+                      decoration: _dec(),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: _submit,
+                    style: ElevatedButton.styleFrom(backgroundColor: widget.brand, foregroundColor: Colors.white),
+                    child: Text(_editingId == null ? 'Tambah' : 'Update'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // TABEL
           Obx(() {
-            final pct = (devC.progress.value * 100).round();
-            return _ProgressLine(
-              value: devC.progress.value,
-              brand: widget.brand,
-              label: '$pct%',
+            if (devC.items.isEmpty) return const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("Belum ada task dev.")));
+            
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                headingRowColor: MaterialStateProperty.all(Colors.grey[100]),
+                columns: const [
+                  DataColumn(label: Text('Design Spec')),
+                  DataColumn(label: Text('Requirement')),
+                  DataColumn(label: Text('Developer')),
+                  DataColumn(label: Text('Status')),
+                  DataColumn(label: Text('Tanggal')),
+                  DataColumn(label: Text('Aksi')),
+                ],
+                rows: devC.items.map((item) {
+                  return DataRow(cells: [
+                    DataCell(Text(item.designSpecName, style: const TextStyle(fontWeight: FontWeight.bold))),
+                    DataCell(Text(item.requirementTitle)),
+                    DataCell(Text(item.pic ?? '-')),
+                    DataCell(_StatusBadge(status: item.status)),
+                    DataCell(Text('${_formatDate(item.startDate)} - ${_formatDate(item.endDate)}')),
+                    DataCell(Row(
+                      children: [
+                        IconButton(icon: const Icon(Icons.edit, size: 18), onPressed: () => _startEdit(item)),
+                        IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 18), onPressed: () => devC.removeAt(devC.items.indexOf(item))),
+                      ],
+                    )),
+                  ]);
+                }).toList(),
+              ),
             );
           }),
-          const SizedBox(height: 16),
-
-          // ================== FORM ==================
-
-          // Baris 1: dropdown DesignSpec full width
-          _RoundedFieldBox(
-            child: DropdownButtonFormField<int>(
-              value: _selectedDesignIndex,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                isDense: true,
-              ),
-              hint: const Text('— Pilih DesignSpec —'),
-              items: designOptions
-                  .map(
-                    (o) => DropdownMenuItem(
-                      value: o.index,
-                      child: Text(
-                        o.label,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (v) => setState(() => _selectedDesignIndex = v),
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          // Baris 2: PIC developer | Tanggal mulai
-          Row(
-            children: [
-              Expanded(
-                child: _RoundedFieldBox(
-                  child: TextField(
-                    controller: _picCtrl,
-                    decoration: const InputDecoration(
-                      hintText: 'PIC developer',
-                      border: InputBorder.none,
-                      isDense: true,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => _pickDate(isStart: true),
-                  child: _RoundedFieldBox(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          _startDate == null
-                              ? 'Tanggal mulai'
-                              : _formatDate(_startDate),
-                          style: const TextStyle(fontSize: 13),
-                        ),
-                        const Icon(Icons.calendar_today_outlined, size: 16),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 8),
-
-          // Baris 3: Tanggal selesai | Status
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => _pickDate(isStart: false),
-                  child: _RoundedFieldBox(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          _endDate == null
-                              ? 'Tanggal selesai'
-                              : _formatDate(_endDate),
-                          style: const TextStyle(fontSize: 13),
-                        ),
-                        const Icon(Icons.calendar_today_outlined, size: 16),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _RoundedFieldBox(
-                  child: DropdownButtonFormField<String>(
-                    value: _status,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      isDense: true,
-                    ),
-                    hint: const Text('Status'),
-                    items: devC.statuses
-                        .map(
-                          (s) => DropdownMenuItem(
-                            value: s,
-                            child: Text(s),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) =>
-                        setState(() => _status = v ?? 'In Progress'),
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 8),
-
-          // Baris 4: Nama developer (full width)
-          _RoundedFieldBox(
-            child: TextField(
-              controller: _devNameCtrl,
-              decoration: const InputDecoration(
-                hintText: 'Nama developer',
-                border: InputBorder.none,
-                isDense: true,
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          // Baris 5: Meta (ops.) + Tombol Tambahkan
-          Row(
-            children: [
-              Expanded(
-                child: _RoundedFieldBox(
-                  child: TextField(
-                    controller: _metaCtrl,
-                    decoration: const InputDecoration(
-                      hintText: 'Meta (ops.)',
-                      border: InputBorder.none,
-                      isDense: true,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 140,
-                height: 46,
-                child: ElevatedButton(
-                  onPressed: _submit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: widget.brand,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: Text(_isEditing ? 'Simpan' : 'Tambahkan'),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          // =================== TABEL ===================
-          Builder(
-            builder: (context) {
-              return Scrollbar(
-                thumbVisibility: true,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minWidth: tableMinW),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: border),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // header
-                          Container(
-                            height: 44,
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 12),
-                            decoration: BoxDecoration(
-                              color: zebra,
-                              borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(12),
-                              ),
-                            ),
-                            child: Row(
-                              children: const [
-                                _HCell('#', 64),
-                                _HCell('Development', 200),
-                                _HCell('DesignSpec', 260),
-                                _HCell('PIC', 140),
-                                _HCell('Mulai', 120),
-                                _HCell('Selesai', 120),
-                                _HCell('Developer', 160),
-                                _HCell('Status', 120),
-                                _HCell('Aksi', 150),
-                              ],
-                            ),
-                          ),
-
-                          // body
-                          Obx(() {
-                            if (devC.items.isEmpty) {
-                              return const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 20),
-                                child: Text('Belum ada task development.'),
-                              );
-                            }
-
-                            return Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children:
-                                  List.generate(devC.items.length, (i) {
-                                final it = devC.items[i];
-                                return Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 10,
-                                  ),
-                                  decoration: const BoxDecoration(
-                                    border: Border(
-                                      top: BorderSide(color: border),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      _RowIndexWithCheck(
-                                        index: i + 1,
-                                        width: 64,
-                                      ),
-                                      _BCell(it.requirement, 200),
-                                      _BCell(it.designSpec, 260),
-                                      _BCell(
-                                        (it.pic ?? '').isEmpty
-                                            ? '-'
-                                            : it.pic!,
-                                        140,
-                                      ),
-                                      _BCell(
-                                          _formatDate(it.startDate), 120),
-                                      _BCell(
-                                          _formatDate(it.endDate), 120),
-                                      _BCell(
-                                        it.developer.isEmpty
-                                            ? '-'
-                                            : it.developer,
-                                        160,
-                                      ),
-                                      _BCell(it.status, 120),
-                                      SizedBox(
-                                        width: 150,
-                                        child: Row(
-                                          children: [
-                                            TextButton(
-                                              onPressed: () =>
-                                                  _startEdit(i),
-                                              style: TextButton.styleFrom(
-                                                padding:
-                                                    const EdgeInsets
-                                                        .symmetric(
-                                                  horizontal: 12,
-                                                  vertical: 6,
-                                                ),
-                                                foregroundColor:
-                                                    const Color(
-                                                        0xFF4A5668),
-                                                backgroundColor:
-                                                    Colors.white,
-                                                shape:
-                                                    RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius
-                                                          .circular(8),
-                                                  side: const BorderSide(
-                                                    color:
-                                                        Color(0xFFE0E4EC),
-                                                  ),
-                                                ),
-                                              ),
-                                              child: const Text('Edit'),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            TextButton(
-                                              onPressed: () =>
-                                                  devC.removeAt(i),
-                                              style: TextButton.styleFrom(
-                                                padding:
-                                                    const EdgeInsets
-                                                        .symmetric(
-                                                  horizontal: 12,
-                                                  vertical: 6),
-                                                foregroundColor:
-                                                    Colors.white,
-                                                backgroundColor:
-                                                    const Color(
-                                                        0xFFFF7A7A),
-                                                shape:
-                                                    RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius
-                                                          .circular(8),
-                                                ),
-                                              ),
-                                              child: const Text('Hapus'),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }),
-                            );
-                          }),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
         ],
       ),
     );
   }
+
+  InputDecoration _dec({String? hint}) => InputDecoration(
+    hintText: hint, contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+  );
 }
 
-/* ===== sub-widgets kecil + helper ===== */
-
-class _RoundedFieldBox extends StatelessWidget {
-  const _RoundedFieldBox({required this.child});
-  final Widget child;
-
+class _StatusBadge extends StatelessWidget {
+  final String status;
+  const _StatusBadge({required this.status});
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FB),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE0E0E6)),
-      ),
-      alignment: Alignment.centerLeft,
-      child: child,
-    );
-  }
-}
-
-class _DesignOption {
-  final int index;
-  final String requirement;
-  final String label;
-  _DesignOption({
-    required this.index,
-    required this.requirement,
-    required this.label,
-  });
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.text);
-  final String text;
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF5C6A82),
-        ),
-      ),
-    );
-  }
-}
-
-class _HCell extends StatelessWidget {
-  const _HCell(this.text, this.w);
-  final String text;
-  final double w;
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: w,
-      child: Text(
-        text,
-        overflow: TextOverflow.ellipsis,
-        softWrap: false,
-        style: const TextStyle(
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF5C6A82),
-        ),
-      ),
-    );
-  }
-}
-
-class _BCell extends StatelessWidget {
-  const _BCell(this.text, this.w);
-  final String text;
-  final double w;
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: w,
-      child: Text(
-        text,
-        overflow: TextOverflow.ellipsis,
-        softWrap: false,
-      ),
-    );
-  }
-}
-
-/// Kolom nomor + checkbox di tabel Development
-class _RowIndexWithCheck extends StatefulWidget {
-  const _RowIndexWithCheck({
-    super.key,
-    required this.index,
-    required this.width,
-  });
-
-  final int index;
-  final double width;
-
-  @override
-  State<_RowIndexWithCheck> createState() => _RowIndexWithCheckState();
-}
-
-class _RowIndexWithCheckState extends State<_RowIndexWithCheck> {
-  bool _checked = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: widget.width,
-      child: Row(
-        children: [
-          SizedBox(
-            width: 18,
-            height: 18,
-            child: Checkbox(
-              value: _checked,
-              onChanged: (v) => setState(() => _checked = v ?? false),
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            '${widget.index}',
-            style: const TextStyle(
-              fontSize: 13.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Progress bar tipis (bar + label % di kanan)
-class _ProgressLine extends StatelessWidget {
-  const _ProgressLine({
-    required this.value,
-    required this.brand,
-    required this.label,
-  });
-
-  final double value; // 0..1
-  final Color brand;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: SizedBox(
-              height: 8,
-              child: LinearProgressIndicator(
-                value: value,
-                backgroundColor: const Color(0xFFE4E6ED),
-                valueColor: AlwaysStoppedAnimation<Color>(brand),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          label,
-          style: const TextStyle(
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF384152),
-          ),
-        ),
-      ],
-    );
+    Color col = Colors.grey;
+    if (status == 'Done') col = Colors.green;
+    if (status == 'In Progress') col = Colors.blue;
+    return Text(status, style: TextStyle(color: col, fontWeight: FontWeight.bold));
   }
 }
