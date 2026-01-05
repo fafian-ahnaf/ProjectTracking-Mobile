@@ -1,94 +1,85 @@
-// lib/app/data/models/project_item.dart
+import '../config/app_config.dart'; // Pastikan import ini ada untuk akses BaseURL
 
 class ProjectItem {
-  final String name;
-  final String pic;
-  final String status; // Belum Mulai | In Progress | Review | Selesai
-  final DateTime? startDate;
-  final DateTime? endDate;
-  final int progress; // 0..100
-  final String documentPath; // sekarang TIDAK nullable → aman
-  final String activity;      // TIDAK nullable → aman
+  int? id;
+  String name;
+  String pic;
+  String status;
+  DateTime? startDate;
+  DateTime? endDate;
 
-  const ProjectItem({
+  int progress; // Progress manual (inputan user)
+  int overallProgress; // Progress hitungan sistem (dari JSON overall_progress)
+  Map<String, dynamic>? sdlcProgress; // Detail progress per fase
+
+  String activity;
+  String? documentPath; // URL file kontrak
+  String? localFilePath;
+
+  ProjectItem({
+    this.id,
     required this.name,
     required this.pic,
     required this.status,
     this.startDate,
     this.endDate,
     this.progress = 0,
-    this.documentPath = '',
+    this.overallProgress = 0, // Default 0
+    this.sdlcProgress,
     this.activity = '',
+    this.documentPath,
+    this.localFilePath,
   });
 
-  ProjectItem copyWith({
-    String? name,
-    String? pic,
-    String? status,
-    DateTime? startDate,
-    DateTime? endDate,
-    int? progress,
-    String? documentPath,
-    String? activity,
-  }) {
-    return ProjectItem(
-      name: name ?? this.name,
-      pic: pic ?? this.pic,
-      status: status ?? this.status,
-      startDate: startDate ?? this.startDate,
-      endDate: endDate ?? this.endDate,
-      progress: progress ?? this.progress,
-      documentPath: documentPath ?? this.documentPath,
-      activity: activity ?? this.activity,
-    );
-  }
-
-  // ==============================
-  //        JSON FACTORY
-  // ==============================
   factory ProjectItem.fromJson(Map<String, dynamic> json) {
-    String? rawStart = json['startDate'];
-    String? rawEnd   = json['endDate'];
-
     return ProjectItem(
-      name: json['name'] ?? '',
-      pic: json['pic'] ?? '',
-      status: json['status'] ?? 'Belum Mulai',
+      id: json['id'],
+      name: json['title'] ?? 'Tanpa Nama',
+      pic: json['pic'] ?? '-',
+      status: _mapStatusFromApi(json['status']),
 
-      startDate: (rawStart != null && rawStart.toString().isNotEmpty)
-          ? DateTime.tryParse(rawStart)
+      startDate: json['start_date'] != null
+          ? DateTime.parse(json['start_date'])
+          : null,
+      endDate: json['end_date'] != null
+          ? DateTime.parse(json['end_date'])
           : null,
 
-      endDate: (rawEnd != null && rawEnd.toString().isNotEmpty)
-          ? DateTime.tryParse(rawEnd)
-          : null,
+      // Ambil progress manual & overall
+      progress: json['progress'] ?? 0,
+      overallProgress: json['overall_progress'] ?? 0,
 
-      progress: (json['progress'] is int)
-          ? json['progress']
-          : int.tryParse('${json['progress'] ?? "0"}') ?? 0,
+      // Ambil detail SDLC (requirement, design, dll)
+      sdlcProgress: json['sdlc_progress'],
 
-      documentPath: json['documentPath']?.toString() ?? '',
-      activity: json['activity']?.toString() ?? '',
+      activity: json['activity'] ?? '',
+
+      // Fix URL: Kalau cuma "/storage/..." kita gabung dengan BaseUrl
+      documentPath: _fixUrl(json['contract_file_url']),
     );
   }
 
-  // ==============================
-  //            TO JSON
-  // ==============================
-  Map<String, dynamic> toJson() {
-    return {
-      'name': name,
-      'pic': pic,
-      'status': status,
-      'startDate': startDate?.toIso8601String(),
-      'endDate': endDate?.toIso8601String(),
-      'progress': progress,
-      'documentPath': documentPath,
-      'activity': activity,
-    };
+  static String? _fixUrl(String? url) {
+    if (url == null) return null;
+    if (url.startsWith('http')) return url;
+    // Jika path relatif (misal: /storage/contracts/...), gabung dengan domain
+    // Hapus slash di awal jika ada biar gak double slash
+    final path = url.startsWith('/') ? url.substring(1) : url;
+    return '${AppConfig.baseUrl}/$path';
   }
 
-  @override
-  String toString() =>
-      'ProjectItem(name: $name, pic: $pic, status: $status, progress: $progress)';
+  static String _mapStatusFromApi(String? status) {
+    switch (status) {
+      case 'todo':
+        return 'Belum Mulai';
+      case 'in_progress':
+        return 'In Progress';
+      case 'review':
+        return 'Review';
+      case 'done':
+        return 'Selesai';
+      default:
+        return 'Belum Mulai';
+    }
+  }
 }

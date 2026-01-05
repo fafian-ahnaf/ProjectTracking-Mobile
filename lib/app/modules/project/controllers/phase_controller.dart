@@ -1,5 +1,4 @@
 import 'package:get/get.dart';
-import 'package:collection/collection.dart';
 import '../../../data/models/requirement_item.dart';
 
 class PhaseData {
