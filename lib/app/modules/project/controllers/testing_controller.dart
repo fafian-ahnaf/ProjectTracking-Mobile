@@ -1,150 +1,99 @@
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:project_tracking/app/data/models/test_case_item.dart';
+import 'package:project_tracking/app/data/service/testing_service.dart';
 
-/// ================= MODEL =================
-class TestCaseItem {
-  final int id;
-  final String title;
-  final String status;
-  final String? requirement;
-  final String? designSpec;
-  final String? tester;
-  final String? scenario;
-  final String? expectedResult;
-
-  // ✅ TAMBAHAN
-  final DateTime? startDate;
-  final DateTime? endDate;
-
-  TestCaseItem({
-    required this.id,
-    required this.title,
-    required this.status,
-    this.requirement,
-    this.designSpec,
-    this.tester,
-    this.scenario,
-    this.expectedResult,
-    this.startDate,
-    this.endDate,
-  });
-
-  TestCaseItem copyWith({
-    int? id,
-    String? title,
-    String? status,
-    String? requirement,
-    String? designSpec,
-    String? tester,
-    String? scenario,
-    String? expectedResult,
-    DateTime? startDate,
-    DateTime? endDate,
-  }) {
-    return TestCaseItem(
-      id: id ?? this.id,
-      title: title ?? this.title,
-      status: status ?? this.status,
-      requirement: requirement ?? this.requirement,
-      designSpec: designSpec ?? this.designSpec,
-      tester: tester ?? this.tester,
-      scenario: scenario ?? this.scenario,
-      expectedResult: expectedResult ?? this.expectedResult,
-      startDate: startDate ?? this.startDate,
-      endDate: endDate ?? this.endDate,
-    );
-  }
-}
-
-/// ================= CONTROLLER =================
 class TestingController extends GetxController {
+  final String tagId;
   TestingController({required this.tagId});
 
-  final String tagId;
+  final TestingService _service = TestingService();
+  
+  var items = <TestCaseItem>[].obs;
+  var isLoading = false.obs;
+  var progress = 0.0.obs;
 
-  /// daftar test case
-  final RxList<TestCaseItem> items = <TestCaseItem>[].obs;
+  int? projectId;
 
-  /// status dropdown
-  final List<String> statuses = const [
-    'Planned',
-    'In Progress',
-    'Passed',
-    'Failed',
-  ];
+  // Status sesuai validasi API: required|in:Planned,In Progress,Passed,Failed
+  final statuses = ['Planned', 'In Progress', 'Passed', 'Failed'];
 
-  /// progress (Passed / total)
-  final RxDouble progress = 0.0.obs;
-
-  int _autoId = 0;
-
-  /// ================= ADD =================
-  void add({
-    required String title,
-    required String status,
-    String? requirement,
-    String? designSpec,
-    String? tester,
-    String? scenario,
-    String? expectedResult,
-
-    // ✅ TAMBAHAN
-    DateTime? startDate,
-    DateTime? endDate,
-  }) {
-    _autoId++;
-
-    final item = TestCaseItem(
-      id: _autoId,
-      title: title,
-      status: status,
-      requirement: _normalize(requirement),
-      designSpec: _normalize(designSpec),
-      tester: _normalize(tester),
-      scenario: _normalize(scenario),
-      expectedResult: _normalize(expectedResult),
-      startDate: startDate,
-      endDate: endDate,
-    );
-
-    items.add(item);
-    _recalcProgress();
+  void setProjectId(int id) {
+    projectId = id;
+    fetchTestCases();
   }
 
-  /// ================= UPDATE =================
-  void updateAt(int index, TestCaseItem value) {
-    if (index < 0 || index >= items.length) return;
-    items[index] = value;
-    _recalcProgress();
+  Future<void> fetchTestCases() async {
+    if (projectId == null) return;
+    try {
+      isLoading.value = true;
+      final data = await _service.getTestCases(projectId!);
+      items.assignAll(data.map((e) => TestCaseItem.fromJson(e)).toList());
+      _calculateProgress();
+    } catch (e) {
+      print("Error fetch testing: $e");
+    } finally {
+      isLoading.value = false;
+    }
   }
 
-  /// ================= REMOVE =================
-  void removeAt(int index) {
-    if (index < 0 || index >= items.length) return;
-    items.removeAt(index);
-    _recalcProgress();
-  }
-
-  /// ================= SET STATUS =================
-  void setStatus(int index, String status) {
-    if (index < 0 || index >= items.length) return;
-    final current = items[index];
-    items[index] = current.copyWith(status: status);
-    _recalcProgress();
-  }
-
-  /// ================= PROGRESS =================
-  void _recalcProgress() {
+  void _calculateProgress() {
     if (items.isEmpty) {
-      progress.value = 0;
+      progress.value = 0.0;
       return;
     }
+    // Hitung progress berdasarkan 'Passed'
     final passed = items.where((e) => e.status == 'Passed').length;
     progress.value = passed / items.length;
   }
 
-  /// ================= HELPER =================
-  String? _normalize(String? v) {
-    if (v == null || v.trim().isEmpty) return null;
-    return v.trim();
+  Future<void> add(TestCaseItem item) async {
+    if (projectId == null) return;
+    try {
+      isLoading.value = true;
+      final res = await _service.create(projectId!, item.toJson());
+      
+      if (res['status'] == 201) {
+        await fetchTestCases();
+        Get.snackbar('Sukses', 'Test Case ditambahkan', backgroundColor: Colors.green, colorText: Colors.white);
+      } else {
+        Get.snackbar('Gagal', res['data']['message'] ?? 'Gagal menyimpan', backgroundColor: Colors.red, colorText: Colors.white);
+      }
+    } catch (e) {
+      Get.snackbar('Error', '$e');
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> updateItem(int id, TestCaseItem item) async {
+    if (projectId == null) return;
+    try {
+      final res = await _service.update(projectId!, id, item.toJson());
+      if (res['status'] == 200) {
+        await fetchTestCases(); // Refresh agar relasi req/design terupdate namanya
+        Get.snackbar('Sukses', 'Test Case diupdate', backgroundColor: Colors.green, colorText: Colors.white);
+      } else {
+        Get.snackbar('Gagal', res['data']['message'] ?? 'Gagal update', backgroundColor: Colors.red, colorText: Colors.white);
+      }
+    } catch (e) {
+      Get.snackbar('Error', '$e');
+    }
+  }
+
+  Future<void> removeAt(int index) async {
+    final item = items[index];
+    if (item.id == null || projectId == null) return;
+
+    try {
+      final success = await _service.delete(projectId!, item.id!);
+      if (success) {
+        items.removeAt(index);
+        _calculateProgress();
+        Get.snackbar('Dihapus', 'Test Case dihapus');
+      }
+    } catch (e) {
+      Get.snackbar('Error', '$e');
+    }
   }
 }

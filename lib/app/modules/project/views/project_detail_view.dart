@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path/path.dart' as p;
 
@@ -24,11 +23,7 @@ class ProjectDetailView extends StatefulWidget {
   final ProjectItem item;
   final Color brand;
 
-  const ProjectDetailView({
-    super.key,
-    required this.item,
-    required this.brand,
-  });
+  const ProjectDetailView({super.key, required this.item, required this.brand});
 
   @override
   State<ProjectDetailView> createState() => _ProjectDetailViewState();
@@ -51,8 +46,8 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
   String _fmt(DateTime? d) => d == null
       ? '-'
       : '${d.day.toString().padLeft(2, '0')}/'
-          '${d.month.toString().padLeft(2, '0')}/'
-          '${d.year}';
+            '${d.month.toString().padLeft(2, '0')}/'
+            '${d.year}';
 
   int _initialSdlcStep(ProjectItem it) {
     final s = (it.status).toLowerCase();
@@ -92,10 +87,7 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
     );
 
     // Requirement controller
-    Get.put(
-      RequirementController(),
-      tag: reqTag,
-    );
+    Get.put(RequirementController(), tag: reqTag);
   }
 
   @override
@@ -126,7 +118,7 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
         children: [
-          // ===== Header: nama + deskripsi + status pill
+          // ===== Header: nama + deskripsi + status pill (TETAP) =====
           _DetailCard(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -146,8 +138,8 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                       Text(
                         (item.activity ?? '').isEmpty
                             ? ((item.pic ?? '').isEmpty
-                                ? '-'
-                                : (item.pic ?? '-'))
+                                  ? '-'
+                                  : (item.pic ?? '-'))
                             : (item.activity ?? '-'),
                         style: const TextStyle(color: Colors.black54),
                       ),
@@ -161,22 +153,27 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
 
           const SizedBox(height: 12),
 
-          // ===== 3 kartu mini (Progres, Dokumen Planning, Requirement Progress)
+          // ===== 3 KARTU MINI (UPDATE BAGIAN PROGRES) =====
           Row(
             children: [
               Expanded(
                 child: _MiniStatCard(
-                  title: 'Progres',
+                  title: 'Overall Progres', // Label diganti
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // 🔥 GANTI: Pakai item.overallProgress dari API
                       Text(
-                        '${item.progress}%',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                        '${item.overallProgress}%',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 18,
+                        ),
                       ),
                       const SizedBox(height: 6),
+                      // Bar visual
                       _ProgressBar(
-                        percent: item.progress.toDouble(),
+                        percent: item.overallProgress.toDouble(),
                         knobColor: brand,
                       ),
                     ],
@@ -184,11 +181,12 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                 ),
               ),
               const SizedBox(width: 12),
+              // Kartu Dokumen Planning (TETAP)
               Expanded(
                 child: Obx(() {
                   final docs = phaseC.of('Planning').docs.length;
                   return _MiniStatCard(
-                    title: 'Dokumen Planning',
+                    title: 'Dokumen Plan',
                     child: Text(
                       '$docs',
                       style: const TextStyle(
@@ -200,6 +198,7 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                 }),
               ),
               const SizedBox(width: 12),
+              // Kartu Requirement (TETAP)
               Expanded(
                 child: Obx(() {
                   final reqC = Get.find<RequirementController>(
@@ -207,11 +206,11 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                   );
                   final pct = (reqC.progress.value * 100).round();
                   return _MiniStatCard(
-                    title: 'Requirement Progress',
+                    title: 'Req. Progress',
                     child: Text(
                       '$pct%',
                       style: const TextStyle(
-                        fontSize: 16,
+                        fontSize: 20, // Samakan size biar rapi
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -222,6 +221,66 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
           ),
 
           const SizedBox(height: 14),
+
+          // 🔥🔥🔥 BARU: BREAKDOWN SDLC PROGRESS (DARI API) 🔥🔥🔥
+          if (item.sdlcProgress != null && item.sdlcProgress!.isNotEmpty) ...[
+            _DetailCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Detail Progres Fase (SDLC)',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                  ),
+                  const SizedBox(height: 12),
+                  // Loop data dari Map sdlcProgress
+                  ...item.sdlcProgress!.entries.map((e) {
+                    final label = e.key
+                        .toUpperCase(); // Requirement, Design, dll
+                    final val = (e.value is int) ? e.value : 0;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                label,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                              Text(
+                                '$val%',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          LinearProgressIndicator(
+                            value: val / 100.0,
+                            backgroundColor: const Color(0xFFF0F0F0),
+                            color: brand, // Warna oranye brand
+                            minHeight: 8,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
 
           // ===== Tabs SDLC + Section per fase + Ringkasan/Timeline Aktivitas
           _DetailCard(
@@ -278,6 +337,9 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                     phases: _phases,
                     requirementTag: 'req-${widget.item.hashCode}',
                     phaseName: 'Planning',
+                    // 🔥 TAMBAHKAN INI:
+                    projectId: widget.item.id!,
+                    initialContractPath: widget.item.documentPath,
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -287,6 +349,7 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                   RequirementSection(
                     brand: widget.brand,
                     controllerTag: 'req-${widget.item.hashCode}',
+                    projectId: widget.item.id!,
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -297,19 +360,25 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                     brand: widget.brand,
                     controllerTag: 'design-${widget.item.hashCode}',
                     requirementTag: 'req-${widget.item.hashCode}',
+                    // 🔥🔥 WAJIB DITAMBAHKAN AGAR TIDAK ERROR 🔥🔥
+                    projectId: widget.item.id!,
                   ),
                   const SizedBox(height: 12),
                 ],
 
                 // === Development Section
+                // ...
                 if (_phases[_active] == 'Development') ...[
                   DevelopmentSection(
                     brand: widget.brand,
                     controllerTag: 'dev-${widget.item.hashCode}',
                     designTag: 'design-${widget.item.hashCode}',
+                    // 🔥 JANGAN LUPA:
+                    projectId: widget.item.id!,
                   ),
                   const SizedBox(height: 12),
                 ],
+                // ...
 
                 // === Testing Section
                 if (_phases[_active] == 'Testing') ...[
@@ -318,6 +387,8 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                     controllerTag: 'test-${widget.item.hashCode}',
                     requirementTag: 'req-${widget.item.hashCode}',
                     designTag: 'design-${widget.item.hashCode}',
+                    // 🔥 WAJIB:
+                    projectId: widget.item.id!,
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -327,6 +398,8 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                   DeploymentSection(
                     brand: widget.brand,
                     controllerTag: 'deploy-${widget.item.hashCode}',
+                    // 🔥 WAJIB:
+                    projectId: widget.item.id!,
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -336,6 +409,8 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                   MaintenanceSection(
                     brand: widget.brand,
                     controllerTag: 'maint-${widget.item.hashCode}',
+                    // 🔥 WAJIB:
+                    projectId: widget.item.id!,
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -357,14 +432,8 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                                 : (item.pic ?? '-'),
                           ),
                           _KVRow(label: 'Status', value: item.status),
-                          _KVRow(
-                            label: 'Mulai',
-                            value: _fmt(item.startDate),
-                          ),
-                          _KVRow(
-                            label: 'Selesai',
-                            value: _fmt(item.endDate),
-                          ),
+                          _KVRow(label: 'Mulai', value: _fmt(item.startDate)),
+                          _KVRow(label: 'Selesai', value: _fmt(item.endDate)),
                           _KVRow(
                             label: 'Kegiatan',
                             value: (item.activity ?? '').isEmpty
@@ -376,7 +445,7 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                     );
 
                     final right = _CardSection(
-                      title: 'Timeline Aktivitas',
+                      title: 'Timeline Project',
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -387,8 +456,10 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                           ),
                           const SizedBox(height: 6),
                           Obx(() {
-                            final notes =
-                                phaseC.of(_phases[_active]).notes.trim();
+                            final notes = phaseC
+                                .of(_phases[_active])
+                                .notes
+                                .trim();
                             if (notes.isEmpty) {
                               return const Padding(
                                 padding: EdgeInsets.only(top: 4),
@@ -423,11 +494,7 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                       );
                     }
                     return Column(
-                      children: [
-                        left,
-                        const SizedBox(height: 12),
-                        right,
-                      ],
+                      children: [left, const SizedBox(height: 12), right],
                     );
                   },
                 ),
@@ -453,28 +520,28 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
           const SizedBox(height: 12),
 
           // ===== Dokumen / Catatan
-          _DetailCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Dokumen / Catatan',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 8),
-                Obx(() {
-                  final notes = phaseC.of(_phases[_active]).notes.trim();
-                  return Text(
-                    notes.isEmpty
-                        ? ((item.activity ?? '').isEmpty
-                            ? '-'
-                            : (item.activity ?? '-'))
-                        : notes,
-                  );
-                }),
-              ],
-            ),
-          ),
+          // _DetailCard(
+          //   child: Column(
+          //     crossAxisAlignment: CrossAxisAlignment.start,
+          //     children: [
+          //       const Text(
+          //         'Dokumen / Catatan',
+          //         style: TextStyle(fontWeight: FontWeight.w700),
+          //       ),
+          //       const SizedBox(height: 8),
+          //       Obx(() {
+          //         final notes = phaseC.of(_phases[_active]).notes.trim();
+          //         return Text(
+          //           notes.isEmpty
+          //               ? ((item.activity ?? '').isEmpty
+          //                     ? '-'
+          //                     : (item.activity ?? '-'))
+          //               : notes,
+          //         );
+          //       }),
+          //     ],
+          //   ),
+          // ),
         ],
       ),
     );
@@ -487,10 +554,7 @@ class _StatusPill extends StatelessWidget {
   final String text;
   final Color brand;
 
-  const _StatusPill({
-    required this.text,
-    required this.brand,
-  });
+  const _StatusPill({required this.text, required this.brand});
 
   @override
   Widget build(BuildContext context) {
@@ -500,10 +564,7 @@ class _StatusPill extends StatelessWidget {
         color: brand.withOpacity(0.15),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(
-        text,
-        style: const TextStyle(fontWeight: FontWeight.w700),
-      ),
+      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w700)),
     );
   }
 }
@@ -512,10 +573,7 @@ class _MiniStatCard extends StatelessWidget {
   final String title;
   final Widget child;
 
-  const _MiniStatCard({
-    required this.title,
-    required this.child,
-  });
+  const _MiniStatCard({required this.title, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -542,10 +600,7 @@ class _ProgressBar extends StatelessWidget {
   final double percent;
   final Color knobColor;
 
-  const _ProgressBar({
-    required this.percent,
-    required this.knobColor,
-  });
+  const _ProgressBar({required this.percent, required this.knobColor});
 
   @override
   Widget build(BuildContext context) {
@@ -563,10 +618,7 @@ class _ProgressBar extends StatelessWidget {
             Positioned(
               left: 0,
               right: w - (w * p),
-              child: Container(
-                height: 4,
-                color: Colors.black26,
-              ),
+              child: Container(height: 4, color: Colors.black26),
             ),
             Positioned(
               left: knobX,
@@ -606,7 +658,7 @@ class _ActivityDot extends StatelessWidget {
     final ts = d == null
         ? ''
         : 'buat pada ${d.day.toString().padLeft(2, '0')} '
-            '${_monthName(d.month)} ${d.year}';
+              '${_monthName(d.month)} ${d.year}';
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -624,10 +676,7 @@ class _ActivityDot extends StatelessWidget {
               if (ts.isNotEmpty)
                 Text(
                   ts,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.black54,
-                  ),
+                  style: const TextStyle(fontSize: 12, color: Colors.black54),
                 ),
               Text(text),
             ],
@@ -687,10 +736,7 @@ class _CardSection extends StatelessWidget {
   final String title;
   final Widget child;
 
-  const _CardSection({
-    required this.title,
-    required this.child,
-  });
+  const _CardSection({required this.title, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -698,10 +744,7 @@ class _CardSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
           const SizedBox(height: 10),
           child,
         ],
@@ -714,10 +757,7 @@ class _KVRow extends StatelessWidget {
   final String label;
   final String value;
 
-  const _KVRow({
-    required this.label,
-    required this.value,
-  });
+  const _KVRow({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -748,10 +788,7 @@ class _DocPreviewCard extends StatelessWidget {
   final String path;
   final Color brand;
 
-  const _DocPreviewCard({
-    required this.path,
-    required this.brand,
-  });
+  const _DocPreviewCard({required this.path, required this.brand});
 
   bool _isImage(String pth) {
     final ext = p.extension(pth).toLowerCase();
@@ -786,48 +823,21 @@ class _DocPreviewCard extends StatelessWidget {
               ],
             )
           : _isImage(path)
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.file(
+                    File(path),
+                    height: 180,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
                   children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.file(
-                        File(path),
-                        height: 180,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            p.basename(path),
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                        TextButton.icon(
-                          onPressed: () => OpenFilex.open(path),
-                          icon: const Icon(Icons.open_in_new, size: 18),
-                          label: const Text('Buka'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: brand,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                )
-              : Row(
-                  children: [
-                    Icon(
-                      _isPdf(path)
-                          ? Icons.picture_as_pdf
-                          : Icons.description_outlined,
-                    ),
-                    const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         p.basename(path),
@@ -835,19 +845,44 @@ class _DocPreviewCard extends StatelessWidget {
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
+                    TextButton.icon(
                       onPressed: () => OpenFilex.open(path),
                       icon: const Icon(Icons.open_in_new, size: 18),
-                      label: const Text('Buka Dokumen'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: brand,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                      ),
+                      label: const Text('Buka'),
+                      style: TextButton.styleFrom(foregroundColor: brand),
                     ),
                   ],
                 ),
+              ],
+            )
+          : Row(
+              children: [
+                Icon(
+                  _isPdf(path)
+                      ? Icons.picture_as_pdf
+                      : Icons.description_outlined,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    p.basename(path),
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () => OpenFilex.open(path),
+                  icon: const Icon(Icons.open_in_new, size: 18),
+                  label: const Text('Buka Dokumen'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: brand,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }

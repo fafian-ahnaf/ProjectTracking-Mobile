@@ -1,47 +1,93 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../../data/service/register_service.dart'; // Import Service Baru
+import '../../../routes/app_pages.dart';
 
 class RegisterController extends GetxController {
+  // Gunakan RegisterService
+  final RegisterService _registerService = RegisterService();
+
+  final usernameC = TextEditingController();
   final emailC = TextEditingController();
   final passC = TextEditingController();
   final confirmC = TextEditingController();
 
-  final obscure1 = true.obs;
-  final obscure2 = true.obs;
-
-  get registerWithGoogle => null;
-
-  get usernameC => null;
+  var obscure1 = true.obs;
+  var obscure2 = true.obs;
+  var isLoading = false.obs;
 
   void toggle1() => obscure1.value = !obscure1.value;
   void toggle2() => obscure2.value = !obscure2.value;
 
   Future<void> onRegister() async {
-    final email = emailC.text.trim();
-    final pass = passC.text;
-    final confirm = confirmC.text;
-
-    if (email.isEmpty || pass.isEmpty || confirm.isEmpty) {
-      Get.snackbar('Validasi', 'Semua field wajib diisi');
+    // 1. Validasi Input Kosong
+    if (usernameC.text.isEmpty ||
+        emailC.text.isEmpty ||
+        passC.text.isEmpty ||
+        confirmC.text.isEmpty) {
+      Get.snackbar(
+        'Peringatan',
+        'Semua kolom harus diisi',
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+      );
       return;
     }
-    if (pass != confirm) {
-      Get.snackbar('Error', 'Password tidak sama');
+
+    // 2. Validasi Match Password (UX)
+    if (passC.text != confirmC.text) {
+      Get.snackbar(
+        'Error',
+        'Password konfirmasi tidak sama',
+        backgroundColor: Colors.redAccent,
+        colorText: Colors.white,
+      );
       return;
     }
 
-    // Simpan ke SharedPreferences
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('user_email', email);
-    await prefs.setString('user_pass', pass);
+    isLoading.value = true;
 
-    Get.snackbar('Berhasil', 'Registrasi sukses!');
-    Get.offAllNamed('/login'); // pindah ke login
+    // 3. Panggil Register Service
+    final result = await _registerService.register(
+      usernameC.text,
+      emailC.text,
+      passC.text,
+      confirmC.text,
+    );
+
+    isLoading.value = false;
+
+    if (result['success']) {
+      // Sukses Register
+      Get.snackbar(
+        'Berhasil',
+        'Register berhasil. Silakan masuk.',
+        backgroundColor: const Color(0xFFA9BA9D), 
+        colorText: Colors.black87,
+        snackPosition: SnackPosition.TOP,
+      );
+
+      // Arahkan langsung ke form Login
+      Get.offAllNamed(Routes.LOGIN);
+    } else {
+      // Gagal Register (misal email sudah ada)
+      Get.snackbar(
+        'Gagal',
+        result['message'],
+        backgroundColor: Colors.redAccent,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
+  }
+
+  void registerWithGoogle() {
+    print("Google Register belum diimplementasi");
   }
 
   @override
   void onClose() {
+    usernameC.dispose();
     emailC.dispose();
     passC.dispose();
     confirmC.dispose();

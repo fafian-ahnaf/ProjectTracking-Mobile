@@ -1,57 +1,57 @@
-// lib/app/modules/dasboard/controllers/dasboard_controller.dart
 import 'package:get/get.dart';
-import 'package:project_tracking/app/data/models/project_item.dart';
-import 'package:project_tracking/app/modules/project/controllers/project_controller.dart';
+import 'package:project_tracking/app/routes/app_pages.dart';
+import '../../../data/service/dashboard_service.dart';
 
 class DashboardController extends GetxController {
-  // Ambil/siapkan ProjectController (pastikan hanya sekali dibuat)
-  late final ProjectController projectC =
-      Get.isRegistered<ProjectController>()
-          ? Get.find<ProjectController>()
-          : Get.put(ProjectController(), permanent: true);
+  final DashboardService _service = DashboardService();
 
-  // Angka-angka untuk kartu statistik
-  final RxInt totalComplete   = 0.obs;
-  final RxInt totalIncomplete = 0.obs;
-  final RxInt totalOverdue    = 0.obs;
-  final RxInt totalProject    = 0.obs;
+  // Reactive Variables untuk UI
+  var isLoading = true.obs;
+  var userName = 'Pengguna'.obs; // Default sebelum load
+  
+  // Statistik (Default 0)
+  var totalProject = 0.obs;
+  var totalInProgress = 0.obs;
+  var totalReview = 0.obs;
+  var totalDone = 0.obs;
+  var totalTodo = 0.obs;
 
   @override
   void onInit() {
     super.onInit();
-
-    // Hitung awal
-    _recompute(projectC.projects);
-
-    // Dengarkan setiap perubahan pada daftar projects
-    ever<List<ProjectItem>>(projectC.projects, _recompute);
+    fetchDashboard();
   }
 
-  // Aturan status selesai/overdue bisa kamu sesuaikan di sini
-  bool _isComplete(ProjectItem p) {
-    // anggap selesai bila status mengandung 'Selesai' atau progress 100
-    final s = p.status.toLowerCase();
-    return s.contains('selesai') || s.contains('done') || p.progress >= 100;
-  }
+  Future<void> fetchDashboard() async {
+    isLoading.value = true;
+    
+    final result = await _service.getDashboardStats();
 
-  bool _isOverdue(ProjectItem p) {
-    // overdue jika sudah lewat endDate dan belum complete
-    if (p.endDate == null) return false;
-    final today = DateTime.now();
-    final end = DateTime(p.endDate!.year, p.endDate!.month, p.endDate!.day);
-    final now = DateTime(today.year, today.month, today.day);
-    return end.isBefore(now) && !_isComplete(p);
-  }
+    if (result['success']) {
+      final data = result['data'];
+      final user = data['user'];
+      final stats = data['stats'];
 
-  void _recompute(List<ProjectItem> list) {
-    final total   = list.length;
-    final done    = list.where(_isComplete).length;
-    final overdue = list.where(_isOverdue).length;
-    final incom   = total - done;
+      // Update User Name
+      userName.value = user['name'] ?? 'Pengguna';
 
-    totalProject.value    = total;
-    totalComplete.value   = done;
-    totalOverdue.value    = overdue;
-    totalIncomplete.value = incom;
+      // Update Statistik
+      totalProject.value = stats['total_project'] ?? 0;
+      totalInProgress.value = stats['total_in_progress'] ?? 0;
+      totalReview.value = stats['total_review'] ?? 0;
+      totalDone.value = stats['total_done'] ?? 0;
+      totalTodo.value = stats['total_todo'] ?? 0; // Kalau mau ditampilkan
+    } else {
+      // Jika butuh login ulang (401)
+      if (result['needLogin'] == true) {
+        Get.offAllNamed(Routes.LOGIN); // Lempar ke login
+        Get.snackbar('Sesi Habis', 'Silakan login kembali');
+      } else {
+        // Error biasa (koneksi dll)
+        Get.snackbar('Error', result['message']);
+      }
+    }
+
+    isLoading.value = false;
   }
 }

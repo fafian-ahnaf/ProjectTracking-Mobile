@@ -10,12 +10,12 @@ class DashboardView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Inject Controller
     final c = Get.put(DashboardController());
 
     return Scaffold(
       backgroundColor: Colors.white,
 
-      // ===== Bottom Bar =====
       bottomNavigationBar: Container(
         height: 56,
         color: brand,
@@ -40,93 +40,113 @@ class DashboardView extends StatelessWidget {
         ),
       ),
 
-      // ===== Body =====
+      // ... bottomNavigationBar tetap sama ...
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(bottom: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _Header(brand: brand),
-              const SizedBox(height: 18),
+        // Tambahkan RefreshIndicator agar user bisa swipe-down untuk reload data
+        child: RefreshIndicator(
+          onRefresh: () async {
+            await c.fetchDashboard();
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.only(bottom: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Update Header dengan Controller
+                _Header(brand: brand, controller: c),
 
-              // ===== Akses Cepat =====
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  'Akses Cepat',
-                  style: TextStyle(
-                    color: Colors.black87,
-                    fontSize: 16.5,
-                    fontWeight: FontWeight.w700,
+                const SizedBox(height: 18),
+
+                // ... Akses Cepat & Quick Action tetap sama ...
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'Akses Cepat',
+                    style: TextStyle(
+                      color: Colors.black87,
+                      fontSize: 16.5,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: Divider(color: Color(0xFFCBCAD1), thickness: 1),
-              ),
-              const SizedBox(height: 14),
-
-              // ===== Quick Action =====
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _QuickAction(
-                      imagePath: 'assets/project_icon.png',
-                      label: 'Project',
-                      onTap: () => Get.toNamed(Routes.PROJECT),
-                    ),
-                    _QuickAction(
-                      imagePath: 'assets/report_icon.png',
-                      label: 'Report',
-                      onTap: () {},
-                    ),
-                  ],
+                // ... (lanjutan kode separator dan quick action kamu) ...
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  child: Divider(color: Color(0xFFCBCAD1), thickness: 1),
                 ),
-              ),
+                const SizedBox(height: 14),
 
-              const SizedBox(height: 18),
-
-              // ===== Stat Kartu =====
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Obx(
-                  () => GridView.count(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    childAspectRatio: 1.35,
+                // ===== Quick Action (Biarkan kode lama) =====
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _StatCard(
-                        title: 'Total complete project',
-                        value: c.totalComplete.value.toString(),
-                        onDetail: () {},
+                      _QuickAction(
+                        imagePath: 'assets/project_icon.png',
+                        label: 'Project',
+                        onTap: () => Get.toNamed(Routes.PROJECT),
                       ),
-                      _StatCard(
-                        title: 'Total incomplete project',
-                        value: c.totalIncomplete.value.toString(),
-                        onDetail: () {},
-                      ),
-                      _StatCard(
-                        title: 'Total overdue project',
-                        value: c.totalOverdue.value.toString(),
-                        onDetail: () {},
-                      ),
-                      _StatCard(
-                        title: 'Total project',
-                        value: c.totalProject.value.toString(),
-                        onDetail: () {},
+                      _QuickAction(
+                        imagePath: 'assets/report_icon.png',
+                        label: 'Report',
+                        onTap: () => Get.toNamed(Routes.REPORTS),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 18),
+
+                // ===== Stat Kartu (UPDATE BAGIAN INI) =====
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Obx(() {
+                    // Jika loading, mungkin bisa tampilkan skeleton atau loader
+                    // Tapi di sini kita biarkan angka update real-time
+                    return GridView.count(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      childAspectRatio: 1.35,
+                      children: [
+                        _StatCard(
+                          title: 'Total Project',
+                          value: c.isLoading.value
+                              ? '...'
+                              : c.totalProject.value.toString(),
+                          onDetail: () {},
+                        ),
+                        _StatCard(
+                          title: 'In Progress',
+                          value: c.isLoading.value
+                              ? '...'
+                              : c.totalInProgress.value.toString(),
+                          onDetail: () {},
+                        ),
+                        _StatCard(
+                          title: 'Review',
+                          value: c.isLoading.value
+                              ? '...'
+                              : c.totalReview.value.toString(),
+                          onDetail: () {},
+                        ),
+                        _StatCard(
+                          title: 'Selesai',
+                          value: c.isLoading.value
+                              ? '...'
+                              : c.totalDone.value.toString(),
+                          onDetail: () {},
+                        ),
+                      ],
+                    );
+                  }),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -134,10 +154,12 @@ class DashboardView extends StatelessWidget {
   }
 }
 
-// ========== HEADER ==========
+// ========== HEADER UPDATE ==========
 class _Header extends StatelessWidget {
-  const _Header({required this.brand});
+  const _Header({required this.brand, required this.controller});
+
   final Color brand;
+  final DashboardController controller; // Terima controller
 
   @override
   Widget build(BuildContext context) {
@@ -150,7 +172,7 @@ class _Header extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ===== Bar atas: Tracking kiri, Setting kanan =====
+          // ... (Bagian Tracking & Setting biarkan sama) ...
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -176,7 +198,11 @@ class _Header extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   padding: const EdgeInsets.all(6),
-                  child: const Icon(Icons.settings, color: Colors.white, size: 18),
+                  child: const Icon(
+                    Icons.settings,
+                    color: Colors.white,
+                    size: 18,
+                  ),
                 ),
               ),
             ],
@@ -184,13 +210,15 @@ class _Header extends StatelessWidget {
 
           const SizedBox(height: 12),
 
-          // ===== Sapaan =====
-          const Text(
-            'Halo Maulidha,',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
+          // ===== Sapaan (DINAMIS) =====
+          Obx(
+            () => Text(
+              'Halo ${controller.userName.value},', // Ambil dari Controller
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
           const Text(
@@ -205,7 +233,11 @@ class _Header extends StatelessWidget {
 
 // ========== QUICK ACTION ==========
 class _QuickAction extends StatelessWidget {
-  const _QuickAction({required this.imagePath, required this.label, this.onTap});
+  const _QuickAction({
+    required this.imagePath,
+    required this.label,
+    this.onTap,
+  });
 
   final String imagePath;
   final String label;

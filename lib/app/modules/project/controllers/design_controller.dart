@@ -1,164 +1,166 @@
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:project_tracking/app/data/models/design_spec_item.dart';
+import 'package:project_tracking/app/data/service/design_service.dart';
 
-/// ======================= MODEL =======================
-class DesignItem {
-  final int id;
-  final String requirement;
-  final String type;         // UI / API / DB / dll
-  final String artifactName; // nama komponen / endpoint / tabel
-  final String status;       // Draft / In Progress / Done
-
-  final String? reference;   // link figma/postman/erd
-  final String? notes;       // catatan teknis
-  final String? meta;        // meta kecil opsional
-  final String? pic;         // PIC design
-
-  final DateTime? startDate;
-  final DateTime? endDate;
-
-  DesignItem({
-    required this.id,
-    required this.requirement,
-    required this.type,
-    required this.artifactName,
-    required this.status,
-    this.reference,
-    this.notes,
-    this.meta,
-    this.pic,
-    this.startDate,
-    this.endDate,
-  });
-
-  DesignItem copyWith({
-    int? id,
-    String? requirement,
-    String? type,
-    String? artifactName,
-    String? status,
-    String? reference,
-    String? notes,
-    String? meta,
-    String? pic,
-    DateTime? startDate,
-    DateTime? endDate,
-  }) {
-    return DesignItem(
-      id: id ?? this.id,
-      requirement: requirement ?? this.requirement,
-      type: type ?? this.type,
-      artifactName: artifactName ?? this.artifactName,
-      status: status ?? this.status,
-      reference: reference ?? this.reference,
-      notes: notes ?? this.notes,
-      meta: meta ?? this.meta,
-      pic: pic ?? this.pic,
-      startDate: startDate ?? this.startDate,
-      endDate: endDate ?? this.endDate,
-    );
-  }
-}
-
-/// ===================== CONTROLLER =====================
 class DesignController extends GetxController {
+  final String tagId;
   DesignController({required this.tagId});
 
-  final String tagId;
+  final DesignService _service = DesignService();
 
-  /// daftar design spec
-  final RxList<DesignItem> items = <DesignItem>[].obs;
+  var items = <DesignSpecItem>[].obs;
+  var isLoading = false.obs;
+  var progress = 0.0.obs;
 
-  /// progress 0..1 (dibaca di UI)
-  final RxDouble progress = 0.0.obs;
+  int? projectId;
 
-  /// dropdown list
-  final List<String> types = const [
-    'UI',
-    'API',
-    'DB',
-    'Flow',
-    'Other',
-  ];
+  // 🔥 UPDATE: Hanya gunakan status yang valid di API Laravel
+  final types = ['UI', 'API', 'DB', 'Flow'];
+  final statuses = ['Draft', 'Review', 'Approved'];
 
-  /// status utama yg dipakai progress
-  final List<String> statuses = const [
-    'Planned',
-    'In Progress',
-    'Done',
-  ];
-
-  int _autoId = 1;
-
-  /// Tambah design baru
-  void add({
-    required String requirement,
-    required String type,
-    required String artifactName,
-    required String status,
-    String? reference,
-    String? notes,
-    String? meta,
-    String? pic,
-    DateTime? startDate,
-    DateTime? endDate,
-  }) {
-    final item = DesignItem(
-      id: _autoId++,
-      requirement: requirement,
-      type: type,
-      artifactName: artifactName,
-      status: status,
-      reference: reference,
-      notes: notes,
-      meta: meta,
-      pic: pic,
-      startDate: startDate,
-      endDate: endDate,
-    );
-
-    items.add(item);
-    _recalcProgress();
+  void setProjectId(int id) {
+    projectId = id;
+    fetchDesignSpecs();
   }
 
-  /// Hapus baris berdasarkan index (dipakai di icon delete)
-  void removeAt(int index) {
-    if (index < 0 || index >= items.length) return;
-    items.removeAt(index);
-    _recalcProgress();
+  Future<void> fetchDesignSpecs() async {
+    if (projectId == null) return;
+    try {
+      isLoading.value = true;
+      final data = await _service.getDesignSpecs(projectId!);
+      items.assignAll(data.map((e) => DesignSpecItem.fromJson(e)).toList());
+      _calculateProgress();
+    } catch (e) {
+      print("Error fetch design: $e");
+    } finally {
+      isLoading.value = false;
+    }
   }
 
-  /// Kalau nanti mau ubah status dari tabel
-  void setStatus(int id, String newStatus) {
-    final idx = items.indexWhere((e) => e.id == id);
-    if (idx == -1) return;
-
-    items[idx] = items[idx].copyWith(status: newStatus);
-    _recalcProgress();
-  }
-
-  /// Hitung progress berdasarkan status Draft / In Progress / Done
-  void _recalcProgress() {
+  void _calculateProgress() {
     if (items.isEmpty) {
-      progress.value = 0;
+      progress.value = 0.0;
+      return;
+    }
+    final approved = items.where((e) => e.status == 'Approved').length;
+    progress.value = approved / items.length;
+  }
+
+  // 🔥 FUNGSI ADD DENGAN DEBUG LENGKAP 🔥
+  Future<void> add(DesignSpecItem item) async {
+    if (projectId == null) {
+      print("❌ ERROR: Project ID is null");
       return;
     }
 
-    double sum = 0;
-    for (final e in items) {
-      final s = e.status.toLowerCase();
+    try {
+      isLoading.value = true;
 
-      if (s.contains('Planned')) {
-        sum += 0.0;
-      } else if (s.contains('in progress') || s.contains('progress')) {
-        sum += 0.5;
-      } else if (s.contains('done') || s.contains('completed')) {
-        sum += 1.0;
+      // 1. Cek Data yang mau dikirim (Payload)
+      final payload = item.toJson();
+
+      print("================= DEBUG REQUEST =================");
+      print("URL: /api/projects/$projectId/design-specs");
+      print(
+        "PAYLOAD: $payload",
+      ); // Cek di console, apakah status 'Planned' atau 'Draft'?
+      print("=================================================");
+
+      final res = await _service.create(projectId!, payload);
+
+      print("================= DEBUG RESPONSE =================");
+      print("STATUS CODE: ${res['status']}");
+      print("DATA: ${res['data']}");
+      print("==================================================");
+
+      final statusCode = res['status'];
+      final responseData = res['data'];
+
+      if (statusCode == 201 || statusCode == 200) {
+        await fetchDesignSpecs();
+        Get.snackbar(
+          'Sukses',
+          'Design Spec ditambahkan',
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+        );
+      } else if (statusCode == 422) {
+        // Tangkap pesan error validasi spesifik
+        String message = 'Validasi Gagal';
+        if (responseData['errors'] != null) {
+          // Ambil error pertama yang muncul
+          final errors = responseData['errors'] as Map<String, dynamic>;
+          print("❌ VALIDATION ERRORS: $errors"); // Lihat detail error field apa
+
+          final firstErrorKey = errors.keys.first;
+          final firstErrorMsg = errors[firstErrorKey][0];
+          message = "$firstErrorKey: $firstErrorMsg";
+        } else {
+          message = responseData['message'] ?? 'Error tidak diketahui';
+        }
+
+        Get.snackbar(
+          'Gagal',
+          message,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 4),
+        );
       } else {
-        // status lain dianggap tengah-tengah
-        sum += 0.5;
+        Get.snackbar(
+          'Gagal',
+          responseData['message'] ?? 'Gagal menyimpan',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
       }
+    } catch (e, stacktrace) {
+      print("❌ EXCEPTION: $e");
+      print("STACKTRACE: $stacktrace");
+      Get.snackbar(
+        'Error',
+        '$e',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    } finally {
+      isLoading.value = false;
     }
+  }
 
-    progress.value = (sum / items.length).clamp(0.0, 1.0);
+  Future<void> updateStatus(int id, String newStatus) async {
+    final item = items.firstWhereOrNull((e) => e.id == id);
+    if (item == null || projectId == null) return;
+
+    final data = item.toJson();
+    data['status'] = newStatus;
+
+    try {
+      final res = await _service.update(projectId!, id, data);
+      if (res['status'] == 200) {
+        item.status = newStatus;
+        items.refresh();
+        _calculateProgress();
+      }
+    } catch (e) {
+      print(e);
+    }
+  }
+
+  Future<void> removeAt(int index) async {
+    final item = items[index];
+    if (item.id == null || projectId == null) return;
+
+    try {
+      final success = await _service.delete(projectId!, item.id!);
+      if (success) {
+        items.removeAt(index);
+        _calculateProgress();
+        Get.snackbar('Dihapus', 'Design Spec dihapus');
+      }
+    } catch (e) {
+      Get.snackbar('Error', '$e');
+    }
   }
 }

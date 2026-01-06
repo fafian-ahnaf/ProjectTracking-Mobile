@@ -11,6 +11,7 @@ abstract class Routes {
   static const EDIT_PROFILE = _Paths.EDIT_PROFILE;
   static const SETTING = _Paths.SETTING;
   static const PROJECT = _Paths.PROJECT;
+  static const REPORTS = _Paths.REPORTS;
 }
 
 abstract class _Paths {
@@ -23,4 +24,5 @@ abstract class _Paths {
   static const EDIT_PROFILE = '/profile/edit';
   static const SETTING = '/setting';
   static const PROJECT = '/project';
+  static const REPORTS = '/reports';
 }

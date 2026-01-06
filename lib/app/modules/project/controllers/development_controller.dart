@@ -1,154 +1,97 @@
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:project_tracking/app/data/models/development_item.dart';
+import 'package:project_tracking/app/data/service/development_service.dart';
 
-/// ======================= MODEL =======================
-class DevelopmentItem {
-  final int id;
-  final String requirement;  // judul requirement
-  final String designSpec;   // label design spec (misal: [API] Login — link)
-  final String developer;    // nama developer
-  final String status;       // Planned / In Progress / Done
-
-  final String? pic;         // PIC dev (opsional, bisa sama dg developer)
-  final String? meta;        // catatan kecil / meta (kalau mau dipakai)
-  final DateTime? startDate;
-  final DateTime? endDate;
-
-  DevelopmentItem({
-    required this.id,
-    required this.requirement,
-    required this.designSpec,
-    required this.developer,
-    required this.status,
-    this.pic,
-    this.meta,
-    this.startDate,
-    this.endDate,
-  });
-
-  DevelopmentItem copyWith({
-    int? id,
-    String? requirement,
-    String? designSpec,
-    String? developer,
-    String? status,
-    String? pic,
-    String? meta,
-    DateTime? startDate,
-    DateTime? endDate,
-  }) {
-    return DevelopmentItem(
-      id: id ?? this.id,
-      requirement: requirement ?? this.requirement,
-      designSpec: designSpec ?? this.designSpec,
-      developer: developer ?? this.developer,
-      status: status ?? this.status,
-      pic: pic ?? this.pic,
-      meta: meta ?? this.meta,
-      startDate: startDate ?? this.startDate,
-      endDate: endDate ?? this.endDate,
-    );
-  }
-}
-
-/// ===================== CONTROLLER =====================
 class DevelopmentController extends GetxController {
+  final String tagId;
   DevelopmentController({required this.tagId});
 
-  final String tagId;
+  final DevelopmentService _service = DevelopmentService();
+  
+  var items = <DevelopmentItem>[].obs;
+  var isLoading = false.obs;
+  var progress = 0.0.obs;
 
-  /// daftar task development
-  final RxList<DevelopmentItem> items = <DevelopmentItem>[].obs;
+  int? projectId;
 
-  /// progress 0..1 (dibaca di UI)
-  ///
-  /// Bobot:
-  /// - Planned     = 0
-  /// - In Progress = 0.5
-  /// - Done        = 1
-  final RxDouble progress = 0.0.obs;
+  final statuses = ['In Progress', 'Review', 'Done'];
 
-  /// status yang dipakai dropdown & perhitungan progress
-  final List<String> statuses = const [
-    'Planned',
-    'In Progress',
-    'Done',
-  ];
-
-  int _autoId = 1;
-
-  /// Tambah task baru
-  void add({
-    required String requirement,
-    required String designSpec,
-    required String developer,
-    required String status,
-    String? pic,
-    String? meta,
-    DateTime? startDate,
-    DateTime? endDate,
-  }) {
-    final item = DevelopmentItem(
-      id: _autoId++,
-      requirement: requirement,
-      designSpec: designSpec,
-      developer: developer,
-      status: status,
-      pic: pic,
-      meta: meta,
-      startDate: startDate,
-      endDate: endDate,
-    );
-
-    items.add(item);
-    _recalcProgress();
+  void setProjectId(int id) {
+    projectId = id;
+    fetchDevelopments();
   }
 
-  /// Update task berdasarkan index (dipakai saat Edit)
-  void updateAt(int index, DevelopmentItem newItem) {
-    if (index < 0 || index >= items.length) return;
-    items[index] = newItem;
-    _recalcProgress();
+  Future<void> fetchDevelopments() async {
+    if (projectId == null) return;
+    try {
+      isLoading.value = true;
+      final data = await _service.getDevelopments(projectId!);
+      items.assignAll(data.map((e) => DevelopmentItem.fromJson(e)).toList());
+      _calculateProgress();
+    } catch (e) {
+      print("Error fetch dev: $e");
+    } finally {
+      isLoading.value = false;
+    }
   }
 
-  /// Hapus task berdasarkan index
-  void removeAt(int index) {
-    if (index < 0 || index >= items.length) return;
-    items.removeAt(index);
-    _recalcProgress();
-  }
-
-  /// Kalau nanti mau ubah status berdasarkan id
-  void setStatus(int id, String newStatus) {
-    final idx = items.indexWhere((e) => e.id == id);
-    if (idx == -1) return;
-
-    items[idx] = items[idx].copyWith(status: newStatus);
-    _recalcProgress();
-  }
-
-  /// Hitung progress berdasarkan status Planned / In Progress / Done
-  void _recalcProgress() {
+  void _calculateProgress() {
     if (items.isEmpty) {
-      progress.value = 0;
+      progress.value = 0.0;
       return;
     }
+    final done = items.where((e) => e.status == 'Done').length;
+    progress.value = done / items.length;
+  }
 
-    double sum = 0;
-    for (final e in items) {
-      final s = e.status.toLowerCase();
-
-      if (s.contains('planned')) {
-        sum += 0.0;            // Planned
-      } else if (s.contains('in progress') || s.contains('progress')) {
-        sum += 0.5;            // In Progress
-      } else if (s.contains('done') || s.contains('completed')) {
-        sum += 1.0;            // Done
+  Future<void> add(DevelopmentItem item) async {
+    if (projectId == null) return;
+    try {
+      isLoading.value = true;
+      final res = await _service.create(projectId!, item.toJson());
+      
+      if (res['status'] == 201) {
+        await fetchDevelopments();
+        Get.snackbar('Sukses', 'Task Development ditambahkan', backgroundColor: Colors.green, colorText: Colors.white);
       } else {
-        // status lain di-treat tengah
-        sum += 0.5;
+        Get.snackbar('Gagal', res['data']['message'] ?? 'Gagal menyimpan', backgroundColor: Colors.red, colorText: Colors.white);
       }
+    } catch (e) {
+      Get.snackbar('Error', '$e');
+    } finally {
+      isLoading.value = false;
     }
+  }
 
-    progress.value = (sum / items.length).clamp(0.0, 1.0);
+  Future<void> updateItem(int id, DevelopmentItem item) async {
+    if (projectId == null) return;
+    try {
+      final res = await _service.update(projectId!, id, item.toJson());
+      if (res['status'] == 200) {
+        await fetchDevelopments(); // Refresh full list agar relasi design spec terupdate
+        Get.snackbar('Sukses', 'Task Development diupdate', backgroundColor: Colors.green, colorText: Colors.white);
+      } else {
+        Get.snackbar('Gagal', res['data']['message'] ?? 'Gagal update', backgroundColor: Colors.red, colorText: Colors.white);
+      }
+    } catch (e) {
+      Get.snackbar('Error', '$e');
+    }
+  }
+
+  Future<void> removeAt(int index) async {
+    final item = items[index];
+    if (item.id == null || projectId == null) return;
+
+    try {
+      final success = await _service.delete(projectId!, item.id!);
+      if (success) {
+        items.removeAt(index);
+        _calculateProgress();
+        Get.snackbar('Dihapus', 'Task dihapus');
+      }
+    } catch (e) {
+      Get.snackbar('Error', '$e');
+    }
   }
 }

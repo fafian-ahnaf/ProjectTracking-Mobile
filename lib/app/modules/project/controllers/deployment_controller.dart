@@ -1,88 +1,98 @@
-// lib/app/modules/project_detail/controllers/deployment_controller.dart
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-
-class DeploymentItem {
-  final String title;
-  final String? environment; // Dev / Staging / Production
-  final String status;       // Planned / In Progress / Done
-  final String? pic;         // Penanggung jawab
-  final String? notes;       // Catatan singkat
-  final DateTime? startDate; // Tanggal Mulai
-  final DateTime? endDate;   // Tanggal Selesai
-
-  DeploymentItem({
-    required this.title,
-    this.environment,
-    required this.status,
-    this.pic,
-    this.notes,
-    this.startDate,
-    this.endDate,
-  });
-
-  DeploymentItem copyWith({
-    String? title,
-    String? environment,
-    String? status,
-    String? pic,
-    String? notes,
-    DateTime? startDate,
-    DateTime? endDate,
-  }) {
-    return DeploymentItem(
-      title: title ?? this.title,
-      environment: environment ?? this.environment,
-      status: status ?? this.status,
-      pic: pic ?? this.pic,
-      notes: notes ?? this.notes,
-      startDate: startDate ?? this.startDate,
-      endDate: endDate ?? this.endDate,
-    );
-  }
-}
+import 'package:project_tracking/app/data/models/deployment_item.dart';
+import 'package:project_tracking/app/data/service/deployment_service.dart';
 
 class DeploymentController extends GetxController {
+  final String tagId;
   DeploymentController({required this.tagId});
 
-  final String tagId;
+  final DeploymentService _service = DeploymentService();
+  
+  var items = <DeploymentItem>[].obs;
+  var isLoading = false.obs;
+  var progress = 0.0.obs;
 
-  final RxList<DeploymentItem> items = <DeploymentItem>[].obs;
+  int? projectId;
 
-  final List<String> statuses = const [
-    'Planned',
-    'In Progress',
-    'Done',
-  ];
+  final statuses = ['Planned', 'In Progress', 'Success', 'Failed'];
+  final environments = ['Development', 'Staging', 'Production'];
 
-  void add({
-    required String title,
-    String? environment,
-    required String status,
-    String? pic,
-    String? notes,
-    DateTime? startDate,
-    DateTime? endDate,
-  }) {
-    items.add(
-      DeploymentItem(
-        title: title,
-        environment: environment,
-        status: status,
-        pic: pic,
-        notes: notes,
-        startDate: startDate,
-        endDate: endDate,
-      ),
-    );
+  void setProjectId(int id) {
+    projectId = id;
+    fetchDeployments();
   }
 
-  void updateAt(int index, DeploymentItem newItem) {
-    if (index < 0 || index >= items.length) return;
-    items[index] = newItem;
+  Future<void> fetchDeployments() async {
+    if (projectId == null) return;
+    try {
+      isLoading.value = true;
+      final data = await _service.getDeployments(projectId!);
+      items.assignAll(data.map((e) => DeploymentItem.fromJson(e)).toList());
+      _calculateProgress();
+    } catch (e) {
+      print("Error fetch deploy: $e");
+    } finally {
+      isLoading.value = false;
+    }
   }
 
-  void removeAt(int index) {
-    if (index < 0 || index >= items.length) return;
-    items.removeAt(index);
+  void _calculateProgress() {
+    if (items.isEmpty) {
+      progress.value = 0.0;
+      return;
+    }
+    final success = items.where((e) => e.status == 'Success').length;
+    progress.value = success / items.length;
+  }
+
+  Future<void> add(DeploymentItem item) async {
+    if (projectId == null) return;
+    try {
+      isLoading.value = true;
+      final res = await _service.create(projectId!, item.toJson());
+      
+      if (res['status'] == 201) {
+        await fetchDeployments();
+        Get.snackbar('Sukses', 'Deployment ditambahkan', backgroundColor: Colors.green, colorText: Colors.white);
+      } else {
+        Get.snackbar('Gagal', res['data']['message'] ?? 'Gagal menyimpan', backgroundColor: Colors.red, colorText: Colors.white);
+      }
+    } catch (e) {
+      Get.snackbar('Error', '$e');
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> updateItem(int id, DeploymentItem item) async {
+    if (projectId == null) return;
+    try {
+      final res = await _service.update(projectId!, id, item.toJson());
+      if (res['status'] == 200) {
+        await fetchDeployments();
+        Get.snackbar('Sukses', 'Deployment diupdate', backgroundColor: Colors.green, colorText: Colors.white);
+      } else {
+        Get.snackbar('Gagal', res['data']['message'] ?? 'Gagal update', backgroundColor: Colors.red, colorText: Colors.white);
+      }
+    } catch (e) {
+      Get.snackbar('Error', '$e');
+    }
+  }
+
+  Future<void> removeAt(int index) async {
+    final item = items[index];
+    if (item.id == null || projectId == null) return;
+
+    try {
+      final success = await _service.delete(projectId!, item.id!);
+      if (success) {
+        items.removeAt(index);
+        _calculateProgress();
+        Get.snackbar('Dihapus', 'Data deployment dihapus');
+      }
+    } catch (e) {
+      Get.snackbar('Error', '$e');
+    }
   }
 }

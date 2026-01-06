@@ -7,10 +7,11 @@ import '../modules/Register/views/register_view.dart';
 import '../modules/dasboard/bindings/dasboard_binding.dart';
 import '../modules/dasboard/views/dasboard_view.dart';
 import '../modules/profile/bindings/profile_binding.dart';
-import '../modules/profile/views/edit_profile_view.dart';
 import '../modules/profile/views/profile_view.dart';
 import '../modules/project/bindings/project_binding.dart';
 import '../modules/project/views/project_view.dart';
+import '../modules/reports/bindings/reports_binding.dart';
+import '../modules/reports/views/reports_view.dart';
 import '../modules/setting/bindings/setting_binding.dart';
 import '../modules/setting/views/setting_view.dart';
 import '../modules/welcome/bindings/welcome_binding.dart';
@@ -53,7 +54,6 @@ class AppPages {
       page: () => const ProfileView(),
       binding: ProfileBinding(),
     ),
-    GetPage(name: '/profile/edit', page: () => const EditProfileView()),
     GetPage(
       name: _Paths.SETTING,
       page: () => const SettingView(),
@@ -63,6 +63,11 @@ class AppPages {
       name: _Paths.PROJECT,
       page: () => const ProjectView(),
       binding: ProjectBinding(),
+    ),
+    GetPage(
+      name: _Paths.REPORTS,
+      page: () => const ReportsView(),
+      binding: ReportsBinding(),
     ),
   ];
 }

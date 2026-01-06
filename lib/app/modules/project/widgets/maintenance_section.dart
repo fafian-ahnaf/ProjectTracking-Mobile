@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:project_tracking/app/data/models/maintenance_item.dart';
 
 import '../controllers/maintenance_controller.dart';
 
@@ -8,10 +9,12 @@ class MaintenanceSection extends StatefulWidget {
     super.key,
     required this.brand,
     required this.controllerTag,
+    required this.projectId, // 🔥 WAJIB
   });
 
   final Color brand;
   final String controllerTag;
+  final int projectId;
 
   @override
   State<MaintenanceSection> createState() => _MaintenanceSectionState();
@@ -20,15 +23,16 @@ class MaintenanceSection extends StatefulWidget {
 class _MaintenanceSectionState extends State<MaintenanceSection> {
   late final MaintenanceController c;
 
+  // Form State
   final _titleCtrl = TextEditingController();
-  final _picCtrl = TextEditingController();
+  final _assigneeCtrl = TextEditingController(); // Assignee
   final _notesCtrl = TextEditingController();
-  final _startDateCtrl = TextEditingController();
-  final _endDateCtrl = TextEditingController();
+  final _openedCtrl = TextEditingController(); // Opened At
+  final _closedCtrl = TextEditingController(); // Closed At
 
   String _selectedStatus = 'Planned';
-  DateTime? _startDate;
-  DateTime? _endDate;
+  DateTime? _openedDate;
+  DateTime? _closedDate;
   int? _editingIndex;
 
   @override
@@ -41,476 +45,256 @@ class _MaintenanceSectionState extends State<MaintenanceSection> {
       );
     }
     c = Get.find<MaintenanceController>(tag: widget.controllerTag);
+    c.setProjectId(widget.projectId);
   }
 
   @override
   void dispose() {
-    _titleCtrl.dispose();
-    _picCtrl.dispose();
-    _notesCtrl.dispose();
-    _startDateCtrl.dispose();
-    _endDateCtrl.dispose();
+    _titleCtrl.dispose(); _assigneeCtrl.dispose(); _notesCtrl.dispose();
+    _openedCtrl.dispose(); _closedCtrl.dispose();
     super.dispose();
   }
 
-  /* ================= DATE ================= */
-
-  Future<void> _pickDate(BuildContext ctx, bool isStart) async {
+  Future<void> _pickDate(BuildContext ctx, bool isOpened) async {
+    final now = DateTime.now();
     final picked = await showDatePicker(
       context: ctx,
-      initialDate: DateTime.now(),
+      initialDate: now,
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
 
     if (picked != null) {
       setState(() {
-        if (isStart) {
-          _startDate = picked;
-          _startDateCtrl.text = _fmt(picked);
+        if (isOpened) {
+          _openedDate = picked;
+          _openedCtrl.text = _fmt(picked);
         } else {
-          _endDate = picked;
-          _endDateCtrl.text = _fmt(picked);
+          _closedDate = picked;
+          _closedCtrl.text = _fmt(picked);
         }
       });
     }
   }
 
-  String _fmt(DateTime? d) {
-    if (d == null) return '';
-    return '${d.day.toString().padLeft(2, '0')}/'
-        '${d.month.toString().padLeft(2, '0')}/'
-        '${d.year}';
-  }
-
-  /* ================= FORM ================= */
+  String _fmt(DateTime? d) => d == null ? '' : '${d.day}/${d.month}/${d.year}';
 
   void _openForm({int? editIndex}) {
     _editingIndex = editIndex;
 
     if (editIndex == null) {
       _titleCtrl.clear();
-      _picCtrl.clear();
+      _assigneeCtrl.clear();
       _notesCtrl.clear();
       _selectedStatus = 'Planned';
-      _startDate = null;
-      _endDate = null;
-      _startDateCtrl.clear();
-      _endDateCtrl.clear();
+      _openedDate = DateTime.now(); // Default hari ini
+      _closedDate = null;
+      _openedCtrl.text = _fmt(_openedDate);
+      _closedCtrl.clear();
     } else {
       final it = c.items[editIndex];
       _titleCtrl.text = it.title;
-      _picCtrl.text = it.pic ?? '';
+      _assigneeCtrl.text = it.assignee ?? '';
       _notesCtrl.text = it.notes ?? '';
       _selectedStatus = it.status;
-      _startDate = it.startDate;
-      _endDate = it.endDate;
-      _startDateCtrl.text = _fmt(it.startDate);
-      _endDateCtrl.text = _fmt(it.endDate);
+      _openedDate = it.openedAt;
+      _closedDate = it.closedAt;
+      _openedCtrl.text = _fmt(it.openedAt);
+      _closedCtrl.text = _fmt(it.closedAt);
     }
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(18))),
+      builder: (ctx) => _buildForm(ctx),
+    );
+  }
+
+  Widget _buildForm(BuildContext ctx) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+        left: 16, right: 16, top: 16,
       ),
-      builder: (ctx) {
-        final media = MediaQuery.of(ctx);
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: media.viewInsets.bottom,
-            left: 16,
-            right: 16,
-            top: 16,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    Text(
-                      editIndex == null
-                          ? 'Tambah Maintenance'
-                          : 'Edit Maintenance',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                TextField(
-                  controller: _titleCtrl,
-                  decoration: _fieldDecoration(
-                    hint: 'Judul / Aktivitas Maintenance',
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                DropdownButtonFormField<String>(
-                  value: _selectedStatus,
-                  isExpanded: true,
-                  decoration: _fieldDecoration(hint: 'Status'),
-                  items: c.statuses
-                      .map(
-                        (e) => DropdownMenuItem(
-                          value: e,
-                          child: Text(e),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) =>
-                      setState(() => _selectedStatus = v ?? 'Planned'),
-                ),
-                const SizedBox(height: 10),
-
-                // ===== TANGGAL MULAI =====
-                TextField(
-                  controller: _startDateCtrl,
-                  readOnly: true,
-                  onTap: () => _pickDate(ctx, true),
-                  decoration: _fieldDecoration(
-                    hint: 'Tanggal Mulai',
-                  ).copyWith(
-                    suffixIcon:
-                        const Icon(Icons.calendar_today_outlined),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // ===== TANGGAL SELESAI =====
-                TextField(
-                  controller: _endDateCtrl,
-                  readOnly: true,
-                  onTap: () => _pickDate(ctx, false),
-                  decoration: _fieldDecoration(
-                    hint: 'Tanggal Selesai',
-                  ).copyWith(
-                    suffixIcon:
-                        const Icon(Icons.calendar_today_outlined),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                TextField(
-                  controller: _picCtrl,
-                  decoration: _fieldDecoration(
-                    hint: 'PIC / Penanggung Jawab (opsional)',
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                TextField(
-                  controller: _notesCtrl,
-                  maxLines: 3,
-                  decoration: _fieldDecoration(
-                    hint: 'Catatan (opsional)',
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 46,
-                  child: ElevatedButton(
-                    onPressed: () => _submit(ctx),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: widget.brand,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text('Simpan Maintenance'),
-                  ),
-                ),
-                const SizedBox(height: 12),
+                Text(_editingIndex == null ? 'Tambah Maintenance' : 'Edit Maintenance',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const Spacer(),
+                IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close)),
               ],
             ),
-          ),
-        );
-      },
+            const SizedBox(height: 10),
+
+            TextField(controller: _titleCtrl, decoration: _dec(hint: 'Judul Maintenance / Bug')),
+            const SizedBox(height: 10),
+
+            DropdownButtonFormField<String>(
+              value: _selectedStatus,
+              isExpanded: true,
+              decoration: _dec(hint: 'Status'),
+              items: c.statuses.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+              onChanged: (v) => setState(() => _selectedStatus = v ?? 'Planned'),
+            ),
+            const SizedBox(height: 10),
+
+            Row(children: [
+              Expanded(
+                child: TextField(controller: _openedCtrl, readOnly: true, onTap: () => _pickDate(ctx, true), decoration: _dec(hint: 'Tanggal Lapor')),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(controller: _closedCtrl, readOnly: true, onTap: () => _pickDate(ctx, false), decoration: _dec(hint: 'Tanggal Selesai')),
+              ),
+            ]),
+            const SizedBox(height: 10),
+
+            TextField(controller: _assigneeCtrl, decoration: _dec(hint: 'Assignee (PIC)')),
+            const SizedBox(height: 10),
+            TextField(controller: _notesCtrl, maxLines: 2, decoration: _dec(hint: 'Catatan')),
+            
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 45,
+              child: ElevatedButton(
+                onPressed: () => _submit(ctx),
+                style: ElevatedButton.styleFrom(backgroundColor: widget.brand, foregroundColor: Colors.white),
+                child: const Text('Simpan'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   void _submit(BuildContext ctx) {
-    final title = _titleCtrl.text.trim();
-    if (title.isEmpty) {
-      ScaffoldMessenger.of(ctx).showSnackBar(
-        const SnackBar(content: Text('Judul maintenance wajib diisi.')),
-      );
+    if (_titleCtrl.text.isEmpty) {
+      Get.snackbar('Error', 'Judul wajib diisi', backgroundColor: Colors.orange, colorText: Colors.white);
       return;
     }
 
-    if (_editingIndex == null) {
-      c.add(
-        title: title,
-        status: _selectedStatus,
-        pic: _picCtrl.text.trim().isEmpty ? null : _picCtrl.text.trim(),
-        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-        startDate: _startDate,
-        endDate: _endDate,
-      );
-    } else {
-      c.updateAt(
-        _editingIndex!,
-        title: title,
-        status: _selectedStatus,
-        pic: _picCtrl.text.trim().isEmpty ? null : _picCtrl.text.trim(),
-        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-        startDate: _startDate,
-        endDate: _endDate,
-      );
-    }
+    final item = MaintenanceItem(
+      title: _titleCtrl.text.trim(),
+      status: _selectedStatus,
+      assignee: _assigneeCtrl.text.trim().isEmpty ? null : _assigneeCtrl.text.trim(),
+      notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+      openedAt: _openedDate,
+      closedAt: _closedDate,
+    );
 
+    if (_editingIndex == null) {
+      c.add(item);
+    } else {
+      c.updateItem(c.items[_editingIndex!].id!, item);
+    }
     Navigator.pop(ctx);
   }
 
-  /* ================= UI ================= */
+  InputDecoration _dec({String? hint}) => InputDecoration(
+    hintText: hint, contentPadding: const EdgeInsets.all(12),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+  );
 
   @override
   Widget build(BuildContext context) {
-    const border = Color(0xFFEEF1F6);
     const zebra = Color(0xFFF7F9FC);
 
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: border),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1A0B1325),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
+        border: Border.all(color: const Color(0xFFEEF1F6)),
+        boxShadow: const [BoxShadow(color: Color(0x1A0B1325), blurRadius: 18, offset: Offset(0, 8))],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            decoration: BoxDecoration(
-              color: widget.brand,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(18)),
-            ),
+          Padding(
+            padding: const EdgeInsets.all(16),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Expanded(
-                  child: Text(
-                    'Pantau Progress Pekerjaanmu:',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  height: 40,
-                  child: ElevatedButton(
-                    onPressed: () => _openForm(),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: const Color(0xFFF69220),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    child: const Text(
-                      'Tambah Maintenance',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ),
+                const Text('Maintenance Log', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF5C6A82))),
+                Obx(() => Text('${(c.progress.value * 100).toInt()}% Resolved', style: TextStyle(fontWeight: FontWeight.bold, color: widget.brand))),
               ],
             ),
           ),
-
+          Obx(() => LinearProgressIndicator(value: c.progress.value, color: widget.brand, backgroundColor: const Color(0xFFE4E6ED), minHeight: 4)),
+          
+          const SizedBox(height: 10),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
-            child: Obx(() {
-              if (c.items.isEmpty) {
-                return const _EmptyMaintenanceView();
-              }
-
-              return Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: border),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    Container(
-                      height: 44,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: zebra,
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(12),
-                        ),
-                      ),
-                      child: Row(
-                        children: const [
-                          _HCell('#', 36),
-                          _HCell('Judul', 200),
-                          _HCell('Status', 110),
-                          _HCell('Mulai', 110),
-                          _HCell('Selesai', 110),
-                          _HCell('Aksi', 120),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      children: List.generate(c.items.length, (i) {
-                        final it = c.items[i];
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          decoration: const BoxDecoration(
-                            border: Border(top: BorderSide(color: border)),
-                          ),
-                          child: Row(
-                            children: [
-                              _BCell('${i + 1}', 36),
-                              _BCell(it.title, 200),
-                              _BCell(it.status, 110),
-                              _BCell(_fmt(it.startDate), 110),
-                              _BCell(_fmt(it.endDate), 110),
-                              SizedBox(
-                                width: 120,
-                                child: Row(
-                                  children: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          _openForm(editIndex: i),
-                                      child: const Text('Edit'),
-                                    ),
-                                    TextButton(
-                                      onPressed: () => c.removeAt(i),
-                                      child: const Text(
-                                        'Hapus',
-                                        style:
-                                            TextStyle(color: Colors.red),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ),
-        ],
-      ),
-    );
-  }
-
-  InputDecoration _fieldDecoration({String? hint}) {
-    return InputDecoration(
-      hintText: hint,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-      filled: true,
-      fillColor: const Color(0xFFF4F6FA),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-      enabledBorder: const OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(14)),
-        borderSide: BorderSide(color: Color(0xFFE6EAF0)),
-      ),
-      focusedBorder: const OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(14)),
-        borderSide: BorderSide(color: Color(0xFFFF9A1E)),
-      ),
-    );
-  }
-}
-
-/* ================= SUB WIDGET ================= */
-
-class _EmptyMaintenanceView extends StatelessWidget {
-  const _EmptyMaintenanceView();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 180,
-      color: const Color(0xFFF7F8FC),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
-          Icon(Icons.folder_rounded,
-              size: 54, color: Color(0xFFF69220)),
-          SizedBox(height: 12),
-          Text(
-            'Belum Ada Aktivitas Maintenance',
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF2D3748),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SizedBox(
+              width: double.infinity, height: 40,
+              child: ElevatedButton(
+                onPressed: () => _openForm(),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: widget.brand, elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: widget.brand))),
+                child: const Text('Tambah Maintenance'),
+              ),
             ),
           ),
+
+          const SizedBox(height: 16),
+
+          Obx(() {
+            if (c.items.isEmpty) return const Padding(padding: EdgeInsets.all(20), child: Text("Belum ada maintenance log."));
+            
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                headingRowColor: MaterialStateProperty.all(zebra),
+                columns: const [
+                  DataColumn(label: Text('Judul')),
+                  DataColumn(label: Text('Status')),
+                  DataColumn(label: Text('Lapor')),
+                  DataColumn(label: Text('Selesai')),
+                  DataColumn(label: Text('Assignee')),
+                  DataColumn(label: Text('Aksi')),
+                ],
+                rows: c.items.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final it = entry.value;
+                  return DataRow(cells: [
+                    DataCell(Text(it.title, style: const TextStyle(fontWeight: FontWeight.bold))),
+                    DataCell(_StatusBadge(status: it.status)),
+                    DataCell(Text(_fmt(it.openedAt))),
+                    DataCell(Text(_fmt(it.closedAt))),
+                    DataCell(Text(it.assignee ?? '-')),
+                    DataCell(Row(
+                      children: [
+                        IconButton(icon: const Icon(Icons.edit, size: 18), onPressed: () => _openForm(editIndex: i)),
+                        IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), onPressed: () => c.removeAt(i)),
+                      ],
+                    )),
+                  ]);
+                }).toList(),
+              ),
+            );
+          }),
+          const SizedBox(height: 16),
         ],
       ),
     );
   }
 }
 
-class _HCell extends StatelessWidget {
-  const _HCell(this.text, this.w);
-  final String text;
-  final double w;
-
+class _StatusBadge extends StatelessWidget {
+  final String status;
+  const _StatusBadge({required this.status});
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: w,
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF5C6A82),
-        ),
-      ),
-    );
-  }
-}
-
-class _BCell extends StatelessWidget {
-  const _BCell(this.text, this.w);
-  final String text;
-  final double w;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: w,
-      child: Text(
-        text,
-        overflow: TextOverflow.ellipsis,
-        maxLines: 2,
-      ),
-    );
+    Color col = Colors.grey;
+    if (status == 'Resolved') col = Colors.green;
+    if (status == 'Closed') col = Colors.black87;
+    if (status == 'In Progress') col = Colors.blue;
+    return Text(status, style: TextStyle(color: col, fontWeight: FontWeight.bold));
   }
 }
