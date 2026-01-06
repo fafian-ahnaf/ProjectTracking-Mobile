@@ -16,6 +16,30 @@ class DashboardView extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
 
+      bottomNavigationBar: Container(
+        height: 56,
+        color: brand,
+        child: Row(
+          children: [
+            Expanded(
+              child: _BottomItem(
+                icon: Icons.home_filled,
+                label: 'Dashboard',
+                active: true,
+                onTap: () {},
+              ),
+            ),
+            Expanded(
+              child: _BottomItem(
+                icon: Icons.person,
+                label: 'Profile',
+                onTap: () => Get.toNamed(Routes.PROFILE),
+              ),
+            ),
+          ],
+        ),
+      ),
+
       // ... bottomNavigationBar tetap sama ...
       body: SafeArea(
         // Tambahkan RefreshIndicator agar user bisa swipe-down untuk reload data

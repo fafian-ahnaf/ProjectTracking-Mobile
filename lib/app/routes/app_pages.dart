@@ -7,7 +7,6 @@ import '../modules/Register/views/register_view.dart';
 import '../modules/dasboard/bindings/dasboard_binding.dart';
 import '../modules/dasboard/views/dasboard_view.dart';
 import '../modules/profile/bindings/profile_binding.dart';
-import '../modules/profile/views/edit_profile_view.dart';
 import '../modules/profile/views/profile_view.dart';
 import '../modules/project/bindings/project_binding.dart';
 import '../modules/project/views/project_view.dart';
@@ -55,7 +54,6 @@ class AppPages {
       page: () => const ProfileView(),
       binding: ProfileBinding(),
     ),
-    GetPage(name: '/profile/edit', page: () => const EditProfileView()),
     GetPage(
       name: _Paths.SETTING,
       page: () => const SettingView(),
