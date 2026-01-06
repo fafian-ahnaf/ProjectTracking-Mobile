@@ -67,7 +67,7 @@ class DashboardView extends StatelessWidget {
                       _QuickAction(
                         imagePath: 'assets/report_icon.png',
                         label: 'Report',
-                        onTap: () {},
+                        onTap: () => Get.toNamed(Routes.REPORTS),
                       ),
                     ],
                   ),
