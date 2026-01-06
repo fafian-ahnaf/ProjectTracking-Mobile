@@ -11,7 +11,7 @@ class DesignSection extends StatefulWidget {
     required this.brand,
     required this.controllerTag,
     required this.requirementTag,
-    required this.projectId, // WAJIB ADA
+    required this.projectId, // 🔥 Pastikan ini ada
   });
 
   final Color brand;
@@ -26,10 +26,12 @@ class DesignSection extends StatefulWidget {
 class _DesignSectionState extends State<DesignSection> {
   late final DesignController c;
 
-  // Form
+  // Form State
   int? _selectedReqId;
   String _selectedType = 'UI';
-  String _selectedStatus = 'Draft'; // Sesuai API (Draft, Review, Approved)
+
+  // 🔥 Default ke 'Draft' agar sesuai API
+  String _selectedStatus = 'Draft';
 
   final _artifactCtrl = TextEditingController();
   final _linkCtrl = TextEditingController();
@@ -40,10 +42,13 @@ class _DesignSectionState extends State<DesignSection> {
   DateTime? _startDate;
   DateTime? _endDate;
 
+  // Status Valid sesuai API DesignSpecApiController
+  final List<String> _validStatuses = ['Draft', 'Review', 'Approved'];
+
   @override
   void initState() {
     super.initState();
-    // Init Controller Unik
+    // Init Controller
     if (!Get.isRegistered<DesignController>(tag: widget.controllerTag)) {
       Get.put(
         DesignController(tagId: widget.controllerTag),
@@ -51,10 +56,11 @@ class _DesignSectionState extends State<DesignSection> {
       );
     }
     c = Get.find<DesignController>(tag: widget.controllerTag);
+    // Set Project ID agar list ter-load
     c.setProjectId(widget.projectId);
   }
 
-  // Ambil Requirement Controller dari section sebelah
+  // Ambil Requirement Controller dari parent
   RequirementController? get reqC {
     if (Get.isRegistered<RequirementController>(tag: widget.requirementTag)) {
       return Get.find<RequirementController>(tag: widget.requirementTag);
@@ -93,13 +99,22 @@ class _DesignSectionState extends State<DesignSection> {
       );
       return;
     }
-    if (_artifactCtrl.text.isEmpty) return;
+    if (_artifactCtrl.text.isEmpty) {
+      Get.snackbar(
+        'Error',
+        'Nama Artefak wajib diisi',
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+      );
+      return;
+    }
 
     final item = DesignSpecItem(
       requirementId: _selectedReqId!,
       artifactType: _selectedType,
       artifactName: _artifactCtrl.text.trim(),
-      status: _selectedStatus,
+      status:
+          _selectedStatus, // Pastikan ini 'Draft', 'Review', atau 'Approved'
       referenceUrl: _linkCtrl.text.trim(),
       rationale: _notesCtrl.text.trim(),
       pic: _picCtrl.text.trim(),
@@ -129,7 +144,6 @@ class _DesignSectionState extends State<DesignSection> {
 
   @override
   Widget build(BuildContext context) {
-    // Ambil list requirement untuk dropdown
     final List<RequirementItem> reqs = reqC?.items ?? [];
 
     return Container(
@@ -178,7 +192,7 @@ class _DesignSectionState extends State<DesignSection> {
             spacing: 10,
             runSpacing: 10,
             children: [
-              // Dropdown Requirement
+              // Dropdown Requirement (Menyimpan ID)
               _fieldBox(
                 width: 300,
                 child: DropdownButtonFormField<int>(
@@ -197,6 +211,7 @@ class _DesignSectionState extends State<DesignSection> {
                   decoration: _dec(),
                 ),
               ),
+
               // Tipe Artefak
               _fieldBox(
                 width: 120,
@@ -209,6 +224,7 @@ class _DesignSectionState extends State<DesignSection> {
                   decoration: _dec(),
                 ),
               ),
+
               // Nama Artefak
               _fieldBox(
                 width: 250,
@@ -217,18 +233,20 @@ class _DesignSectionState extends State<DesignSection> {
                   decoration: _dec(hint: 'Nama Artefak (Login UI)'),
                 ),
               ),
-              // Status
+
+              // 🔥 STATUS DROPDOWN (Fixed Items)
               _fieldBox(
                 width: 140,
                 child: DropdownButtonFormField<String>(
                   value: _selectedStatus,
-                  items: c.statuses
+                  items: _validStatuses
                       .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                       .toList(),
                   onChanged: (v) => setState(() => _selectedStatus = v!),
                   decoration: _dec(),
                 ),
               ),
+
               // Link Ref
               _fieldBox(
                 width: 300,
@@ -258,11 +276,9 @@ class _DesignSectionState extends State<DesignSection> {
           // TABLE
           Obx(() {
             if (c.items.isEmpty)
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(20),
-                  child: Text("Belum ada data design."),
-                ),
+              return const Padding(
+                padding: EdgeInsets.all(20),
+                child: Center(child: Text("Belum ada data design.")),
               );
 
             return SingleChildScrollView(
@@ -289,7 +305,15 @@ class _DesignSectionState extends State<DesignSection> {
                       DataCell(Text(item.artifactType)),
                       DataCell(Text(item.artifactName)),
                       DataCell(_StatusBadge(status: item.status)),
-                      DataCell(Text(item.referenceUrl ?? '-')),
+                      DataCell(
+                        item.referenceUrl != null
+                            ? const Icon(
+                                Icons.link,
+                                size: 18,
+                                color: Colors.blue,
+                              )
+                            : const Text('-'),
+                      ),
                       DataCell(
                         Row(
                           children: [
@@ -318,7 +342,6 @@ class _DesignSectionState extends State<DesignSection> {
 
   Widget _fieldBox({required double width, required Widget child}) =>
       SizedBox(width: width, child: child);
-
   InputDecoration _dec({String? hint}) => InputDecoration(
     hintText: hint,
     contentPadding: const EdgeInsets.symmetric(horizontal: 12),

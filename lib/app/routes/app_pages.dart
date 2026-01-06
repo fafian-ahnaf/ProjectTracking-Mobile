@@ -11,6 +11,8 @@ import '../modules/profile/views/edit_profile_view.dart';
 import '../modules/profile/views/profile_view.dart';
 import '../modules/project/bindings/project_binding.dart';
 import '../modules/project/views/project_view.dart';
+import '../modules/reports/bindings/reports_binding.dart';
+import '../modules/reports/views/reports_view.dart';
 import '../modules/setting/bindings/setting_binding.dart';
 import '../modules/setting/views/setting_view.dart';
 import '../modules/welcome/bindings/welcome_binding.dart';
@@ -63,6 +65,11 @@ class AppPages {
       name: _Paths.PROJECT,
       page: () => const ProjectView(),
       binding: ProjectBinding(),
+    ),
+    GetPage(
+      name: _Paths.REPORTS,
+      page: () => const ReportsView(),
+      binding: ReportsBinding(),
     ),
   ];
 }

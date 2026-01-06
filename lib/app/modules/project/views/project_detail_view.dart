@@ -360,7 +360,8 @@ class _ProjectDetailViewState extends State<ProjectDetailView> {
                     brand: widget.brand,
                     controllerTag: 'design-${widget.item.hashCode}',
                     requirementTag: 'req-${widget.item.hashCode}',
-                    projectId: widget.item.id!, // <--- INI WAJIB ADA
+                    // 🔥🔥 WAJIB DITAMBAHKAN AGAR TIDAK ERROR 🔥🔥
+                    projectId: widget.item.id!,
                   ),
                   const SizedBox(height: 12),
                 ],

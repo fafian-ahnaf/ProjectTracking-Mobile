@@ -8,18 +8,17 @@ class DesignController extends GetxController {
   DesignController({required this.tagId});
 
   final DesignService _service = DesignService();
-  
+
   var items = <DesignSpecItem>[].obs;
   var isLoading = false.obs;
   var progress = 0.0.obs;
 
-  // Variabel untuk menyimpan ID Project
   int? projectId;
 
+  // 🔥 UPDATE: Hanya gunakan status yang valid di API Laravel
   final types = ['UI', 'API', 'DB', 'Flow'];
   final statuses = ['Draft', 'Review', 'Approved'];
 
-  // Dipanggil dari UI untuk set project ID & load data
   void setProjectId(int id) {
     projectId = id;
     fetchDesignSpecs();
@@ -48,20 +47,83 @@ class DesignController extends GetxController {
     progress.value = approved / items.length;
   }
 
+  // 🔥 FUNGSI ADD DENGAN DEBUG LENGKAP 🔥
   Future<void> add(DesignSpecItem item) async {
-    if (projectId == null) return;
+    if (projectId == null) {
+      print("❌ ERROR: Project ID is null");
+      return;
+    }
+
     try {
       isLoading.value = true;
-      final res = await _service.create(projectId!, item.toJson());
-      
-      if (res['status'] == 201) {
+
+      // 1. Cek Data yang mau dikirim (Payload)
+      final payload = item.toJson();
+
+      print("================= DEBUG REQUEST =================");
+      print("URL: /api/projects/$projectId/design-specs");
+      print(
+        "PAYLOAD: $payload",
+      ); // Cek di console, apakah status 'Planned' atau 'Draft'?
+      print("=================================================");
+
+      final res = await _service.create(projectId!, payload);
+
+      print("================= DEBUG RESPONSE =================");
+      print("STATUS CODE: ${res['status']}");
+      print("DATA: ${res['data']}");
+      print("==================================================");
+
+      final statusCode = res['status'];
+      final responseData = res['data'];
+
+      if (statusCode == 201 || statusCode == 200) {
         await fetchDesignSpecs();
-        Get.snackbar('Sukses', 'Design Spec ditambahkan', backgroundColor: Colors.green, colorText: Colors.white);
+        Get.snackbar(
+          'Sukses',
+          'Design Spec ditambahkan',
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+        );
+      } else if (statusCode == 422) {
+        // Tangkap pesan error validasi spesifik
+        String message = 'Validasi Gagal';
+        if (responseData['errors'] != null) {
+          // Ambil error pertama yang muncul
+          final errors = responseData['errors'] as Map<String, dynamic>;
+          print("❌ VALIDATION ERRORS: $errors"); // Lihat detail error field apa
+
+          final firstErrorKey = errors.keys.first;
+          final firstErrorMsg = errors[firstErrorKey][0];
+          message = "$firstErrorKey: $firstErrorMsg";
+        } else {
+          message = responseData['message'] ?? 'Error tidak diketahui';
+        }
+
+        Get.snackbar(
+          'Gagal',
+          message,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 4),
+        );
       } else {
-        Get.snackbar('Gagal', res['data']['message'] ?? 'Gagal menyimpan', backgroundColor: Colors.red, colorText: Colors.white);
+        Get.snackbar(
+          'Gagal',
+          responseData['message'] ?? 'Gagal menyimpan',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
       }
-    } catch (e) {
-      Get.snackbar('Error', '$e');
+    } catch (e, stacktrace) {
+      print("❌ EXCEPTION: $e");
+      print("STACKTRACE: $stacktrace");
+      Get.snackbar(
+        'Error',
+        '$e',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
     } finally {
       isLoading.value = false;
     }
